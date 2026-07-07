@@ -1,0 +1,126 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import type { Category } from '@/lib/types';
+
+const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
+
+const categoryIcons: Record<string, string> = {
+  'Crops & Grains': '', 'Livestock': '', 'Poultry': '', 'Aquaculture': '', 'Other': '',
+};
+
+export default function NewListingPage() {
+  const router = useRouter();
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState<Category>('Crops & Grains');
+  const [quantity, setQuantity] = useState('');
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/login'); return; }
+    const { error: insertError } = await supabase.from('listings').insert({
+      farmer_id: user.id, title, category, quantity_available: quantity,
+      price_per_unit: parseFloat(price), image_url: imageUrl || 'https://placehold.co/600x400?text=TheFarmYard',
+      description: description || null,
+    });
+    if (insertError) { setError(insertError.message); setLoading(false); return; }
+    router.push('/dashboard/farmer');
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-farm-green to-emerald-green flex items-center justify-center text-white text-lg shadow-sm">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900">Create New Listing</h1>
+          <p className="text-sm text-gray-500">List your produce for buyers</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+        {error && (
+          <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-alert-red text-sm rounded-xl flex items-center gap-2 animate-fade-in">
+            <span className="w-5 h-5 rounded-full bg-red-200 flex items-center justify-center text-xs font-bold shrink-0">✕</span> {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., Boer Goats, Fresh Catfish, White Maize"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {categories.map((cat) => (
+                <button key={cat} type="button" onClick={() => setCategory(cat)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                    category === cat ? 'border-farm-green bg-farm-green text-white shadow-sm' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}>
+                  <span className="text-xs">{cat}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantity Available</label>
+              <input type="text" value={quantity} onChange={(e) => setQuantity(e.target.value)}
+                placeholder="e.g., 50 Crates"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
+            </div>
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1.5">Price Per Unit (GH₵)</label>
+              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00" step="0.01" min="0"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Image URL</label>
+            <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+            <p className="text-xs text-gray-400 mt-1.5">Leave empty to use a placeholder image.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Description (optional)</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              rows={3} placeholder="Describe your product, quality, harvest date, etc."
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white resize-none" />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={loading}
+              className="px-6 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition disabled:opacity-50 shadow-sm hover:shadow-md active:scale-[0.98]">
+              {loading ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating...</span> : 'Create Listing'}
+            </button>
+            <Link href="/dashboard/farmer" className="px-6 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition">
+              Cancel
+            </Link>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
