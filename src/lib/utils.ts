@@ -1,4 +1,10 @@
 export function generateDeliveryToken(): string {
+  // CSPRNG — Math.random is predictable and must not secure escrow tokens
+  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return String(100000 + (buf[0] % 900000));
+  }
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 

@@ -91,6 +91,8 @@ function SignupPageContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!fullName.trim() || !location.trim()) { setError('Full name and location are required.'); return; }
+    if (phoneNumber.replace(/\D/g, '').length < 12) { setError('Enter a valid Ghana phone number (9 digits after +233).'); return; }
     setLoading(true);
     const supabase = createClient();
     const { data, error: signUpError } = await supabase.auth.signUp({

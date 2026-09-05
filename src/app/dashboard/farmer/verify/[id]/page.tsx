@@ -20,27 +20,35 @@ export default function VerifyDeliveryPage() {
   useEffect(() => {
     const supabase = createClient();
     async function load() {
-      const { data } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('id', params.id).single();
-      setTx(data);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/login'); return; }
+      const { data } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('id', params.id).eq('farmer_id', user.id).single();
+      setTx(data ?? null);
       setLoading(false);
     }
     load();
-  }, [params.id]);
+  }, [params.id, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!tx) { setError('Transaction not found.'); return; }
+    if (tx.status !== 'dispatched') { setError('Only dispatched transactions can be verified.'); return; }
     if (token.length !== 6 || !/^\d{6}$/.test(token)) { setError('Please enter a valid 6-digit token.'); return; }
     setSubmitting(true);
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== tx.farmer_id) { setError('You are not authorized for this transaction.'); setSubmitting(false); return; }
     if (token !== tx?.delivery_token) { setError('Invalid delivery token. Please check and try again.'); setSubmitting(false); return; }
-    const { error: updateError } = await supabase.from('escrow_transactions').update({ status: 'released' }).eq('id', params.id);
+    const { error: updateError } = await supabase.from('escrow_transactions').update({ status: 'released' }).eq('id', params.id).eq('farmer_id', user.id).eq('status', 'dispatched');
     if (updateError) { setError(updateError.message); setSubmitting(false); return; }
     router.push('/dashboard/farmer');
   }
 
   if (loading) return <div className="max-w-md mx-auto p-4 sm:p-6 space-y-4"><Skeleton className="h-24 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>;
-  if (!tx) return <div className="flex items-center justify-center h-64 text-gray-500">Transaction not found.</div>;
+  if (!tx) return <div className="flex items-center justify-center h-64 text-gray-500">Transaction not found or you are not authorized.</div>;
+  if (tx.status === 'released') return <div className="flex items-center justify-center h-64 text-gray-500">Funds already released for this transaction.</div>;
+  if (tx.status !== 'dispatched') return <div className="flex items-center justify-center h-64 text-gray-500">This transaction must be dispatched before verification (current: {tx.status.replace('_', ' ')}).</div>;
 
   return (
     <div className="max-w-md mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">

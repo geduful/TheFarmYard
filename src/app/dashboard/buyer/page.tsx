@@ -108,6 +108,7 @@ function BuyerDashboardContent() {
 
   async function handleReportSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!profile) { setReportError('Please sign in again.'); return; }
     if (!reportSubject.trim() || !reportDescription.trim()) { setReportError('Please fill in all fields.'); return; }
     setReportError(''); setReportSubmitting(true);
     const supabase = createClient();
@@ -128,6 +129,7 @@ function BuyerDashboardContent() {
 
   async function handleRatingSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!profile) { setRatingError('Please sign in again.'); return; }
     if (!ratingTx || ratingStars === 0) { setRatingError('Please select a star rating.'); return; }
     setRatingError(''); setRatingSubmitting(true);
     const supabase = createClient();

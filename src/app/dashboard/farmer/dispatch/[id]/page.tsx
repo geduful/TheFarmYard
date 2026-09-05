@@ -25,12 +25,14 @@ export default function DispatchPage() {
   useEffect(() => {
     const supabase = createClient();
     async function load() {
-      const { data } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('id', params.id).single();
-      setTx(data);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/login'); return; }
+      const { data } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('id', params.id).eq('farmer_id', user.id).single();
+      setTx(data ?? null);
       setLoading(false);
     }
     load();
-  }, [params.id]);
+  }, [params.id, router]);
 
   function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -44,8 +46,14 @@ export default function DispatchPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!tx) { setError('Transaction not found.'); return; }
+    if (tx.status !== 'held_in_escrow') { setError('This transaction can no longer be dispatched.'); return; }
+    if (!licensePlate.trim()) { setError('Vehicle license plate is required.'); return; }
+    if (driverPhone.replace(/\D/g, '').length < 12) { setError('Enter a valid driver phone number.'); return; }
     setSubmitting(true);
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== tx.farmer_id) { setError('You are not authorized to dispatch this transaction.'); setSubmitting(false); return; }
     let waybillUrl: string | null = null;
     if (waybillFile) {
       try {
@@ -57,15 +65,16 @@ export default function DispatchPage() {
       }
     }
     const { error: updateError } = await supabase.from('escrow_transactions').update({
-      vehicle_license_plate: licensePlate, driver_phone_number: driverPhone,
+      vehicle_license_plate: licensePlate.trim(), driver_phone_number: driverPhone,
       waybill_receipt_url: waybillUrl, status: 'dispatched', dispatched_at: new Date().toISOString(),
-    }).eq('id', params.id);
+    }).eq('id', params.id).eq('farmer_id', user.id).eq('status', 'held_in_escrow');
     if (updateError) { setError(updateError.message); setSubmitting(false); return; }
     router.push('/dashboard/farmer');
   }
 
   if (loading) return <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-4"><Skeleton className="h-24 rounded-2xl" /><Skeleton className="h-80 rounded-2xl" /></div>;
-  if (!tx) return <div className="flex items-center justify-center h-64 text-gray-500">Transaction not found.</div>;
+  if (!tx) return <div className="flex items-center justify-center h-64 text-gray-500">Transaction not found or you are not authorized.</div>;
+  if (tx.status !== 'held_in_escrow') return <div className="max-w-2xl mx-auto p-6 text-center text-gray-500">This transaction is already {tx.status.replace('_', ' ')} and can no longer be dispatched.</div>;
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">
