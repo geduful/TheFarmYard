@@ -1,12 +1,35 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const publicPaths = ['/', '/login', '/signup', '/auth/callback'];
+// Exact match for '/', prefix-with-boundary for the rest.
+// NOTE: '/' must NOT use startsWith — every path starts with '/'.
+const publicExact = new Set(['/']);
+const publicPrefixes = [
+  '/login',
+  '/signup',
+  '/auth/callback',
+  '/forgot-password',
+  '/marketplace',
+  '/policy',
+];
 
-export async function middleware(request: NextRequest) {
+function isPublicPath(pathname: string): boolean {
+  if (publicExact.has(pathname)) return true;
+  return publicPrefixes.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+}
+
+function isPublicFile(pathname: string): boolean {
+  // Skip middleware for static assets (logo.png, *.svg, etc.)
+  if (pathname.startsWith('/_next/')) return true;
+  return /\.[a-zA-Z0-9]+$/.test(pathname);
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
+  if (isPublicFile(pathname) || isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -54,7 +77,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Missing profile (e.g. signup trigger failed) — don't strand the user
+  if (!profile) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/signup';
+    return NextResponse.redirect(url);
+  }
+
   if (pathname.startsWith('/dashboard/farmer') && profile?.role !== 'farmer') {
+    return NextResponse.redirect(new URL('/marketplace', request.url));
+  }
+
+  if (pathname.startsWith('/dashboard/buyer') && profile?.role !== 'buyer') {
     return NextResponse.redirect(new URL('/marketplace', request.url));
   }
 
@@ -66,5 +100,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/public).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*|api/public).*)'],
 };

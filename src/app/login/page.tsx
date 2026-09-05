@@ -89,7 +89,7 @@ function LoginPageContent() {
         {/* Bottom content — anchored, no floating boxes */}
         <div className="absolute bottom-0 left-0 right-0 px-10 pb-12 z-10">
           <p className="text-green-400 text-xs font-semibold uppercase tracking-[0.18em] mb-4">
-            Ghana's Agricultural Marketplace
+            Ghana&apos;s Agricultural Marketplace
           </p>
           <h2 className="text-white text-4xl xl:text-[2.6rem] font-bold leading-[1.15] tracking-tight mb-4">
             From the soil to<br />

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, EscrowTransaction, Report, FarmerRating, ReportCategory } from '@/lib/types';
+import type { Listing, EscrowTransaction, Profile, ReportCategory } from '@/lib/types';
 import { formatCurrency, calculateEscrowFees, generateDeliveryToken } from '@/lib/utils';
 import EscrowTracker from '@/components/EscrowTracker';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -23,7 +23,7 @@ function BuyerDashboardContent() {
   const searchParams = useSearchParams();
   const checkoutParam = searchParams.get('checkout');
 
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,9 +62,11 @@ function BuyerDashboardContent() {
 
       if (checkoutParam) {
         try {
-          const params = JSON.parse(decodeURIComponent(checkoutParam));
-          const { data: listing } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('id', params.listingId).single();
-          if (listing) { setCheckoutListing(listing); setShowCheckout(true); }
+          const params = JSON.parse(decodeURIComponent(checkoutParam)) as { listingId?: number };
+          if (typeof params.listingId === 'number') {
+            const { data: listing } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('id', params.listingId).eq('is_approved', true).single();
+            if (listing && listing.farmer_id !== user.id) { setCheckoutListing(listing); setShowCheckout(true); }
+          }
         } catch {}
       }
 
@@ -73,7 +75,7 @@ function BuyerDashboardContent() {
 
       // Load already-rated transaction IDs
       const { data: existingRatings } = await supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id);
-      setSubmittedRatings(new Set((existingRatings || []).map((r: FarmerRating) => r.transaction_id)));
+      setSubmittedRatings(new Set((existingRatings || []).map((r: { transaction_id: number }) => r.transaction_id)));
 
       setLoading(false);
     }
@@ -83,21 +85,25 @@ function BuyerDashboardContent() {
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault();
     if (!checkoutListing || !profile) return;
+    if (checkoutListing.farmer_id === profile.id) { setCheckoutError('You cannot purchase your own listing.'); return; }
+    if (!checkoutListing.is_approved) { setCheckoutError('This listing is no longer available.'); return; }
+    if (!Number.isFinite(quantity) || quantity < 1) { setCheckoutError('Quantity must be at least 1.'); return; }
     setCheckoutError('');
     setCheckoutLoading(true);
     const baseAmount = checkoutListing.price_per_unit * quantity;
     const fees = calculateEscrowFees(baseAmount);
     const token = generateDeliveryToken();
     const supabase = createClient();
-    const { error: insertError } = await supabase.from('escrow_transactions').insert({
+    const { data: inserted, error: insertError } = await supabase.from('escrow_transactions').insert({
       listing_id: checkoutListing.id, buyer_id: profile.id, farmer_id: checkoutListing.farmer_id,
       base_amount: baseAmount, buyer_fee: fees.buyerFee, farmer_fee: fees.farmerFee,
       total_buyer_paid: fees.totalBuyerPaid, total_farmer_yield: fees.totalFarmerYield,
       platform_revenue: fees.platformRevenue, status: 'held_in_escrow', delivery_token: token,
-    });
+    }).select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').single();
     if (insertError) { setCheckoutError(insertError.message); setCheckoutLoading(false); return; }
-    setShowCheckout(false); setCheckoutListing(null);
-    router.push('/dashboard/buyer');
+    if (inserted) setTransactions((prev) => [inserted as EscrowTransaction, ...prev]);
+    setShowCheckout(false); setCheckoutListing(null); setQuantity(1); setCheckoutLoading(false);
+    router.replace('/dashboard/buyer');
   }
 
   async function handleReportSubmit(e: React.FormEvent) {

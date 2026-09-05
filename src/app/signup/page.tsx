@@ -172,7 +172,7 @@ function SignupPageContent() {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-[1.6rem] font-bold text-gray-900 tracking-tight">Create your account</h1>
-            <p className="text-gray-500 mt-1.5 text-sm">Join Ghana's premier agricultural marketplace</p>
+            <p className="text-gray-500 mt-1.5 text-sm">Join Ghana&apos;s premier agricultural marketplace</p>
           </div>
 
           {/* Role selector */}

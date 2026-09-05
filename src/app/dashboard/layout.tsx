@@ -37,17 +37,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    let cancelled = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelled) return;
       if (!user) { router.push('/login'); return; }
       supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
-        setProfile(data);
+        if (!cancelled) setProfile(data);
       });
     });
+    return () => { cancelled = true; };
   }, [router]);
 
   async function handleSignOut() {
@@ -97,12 +98,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </header>
 
       <div className="flex flex-1 relative">
-        {mounted && sidebarOpen && (
+        {sidebarOpen && (
           <div className="fixed inset-0 bg-black/30 z-40 md:hidden backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)} />
         )}
 
-        <aside className={`w-64 bg-white border-r border-gray-100 flex-shrink-0 fixed md:sticky top-14 md:top-14 bottom-0 z-50 transform transition-transform duration-200 ease-out md:transform-none overflow-y-auto ${mounted && sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <aside className={`w-64 bg-white border-r border-gray-100 flex-shrink-0 fixed md:sticky top-14 md:top-14 bottom-0 z-50 transform transition-transform duration-200 ease-out md:transform-none overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="p-4">
             <div className="flex items-center gap-3 mb-5 p-3 bg-gradient-to-br from-farm-green to-farm-green-dark rounded-xl shadow-sm">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold shrink-0 backdrop-blur-sm">

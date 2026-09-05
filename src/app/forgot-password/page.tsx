@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -23,7 +23,8 @@ export default function ForgotPasswordPage() {
 function ForgotPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>('method');
+  const initialStep: Step = searchParams.get('step') === 'reset' ? 'reset' : 'method';
+  const [step, setStep] = useState<Step>(initialStep);
   const [method, setMethod] = useState<'email' | 'phone'>('email');
   const [contact, setContact] = useState('');
   const [code, setCode] = useState(['', '', '', '']);
@@ -33,12 +34,6 @@ function ForgotPasswordContent() {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    if (searchParams.get('step') === 'reset') {
-      setStep('reset');
-    }
-  }, [searchParams]);
 
   function maskContact(value: string, type: 'email' | 'phone') {
     if (type === 'email') {
@@ -110,8 +105,6 @@ function ForgotPasswordContent() {
 
       setUserId(profile.id);
       setUserEmail(userEmail);
-
-      console.log(`[DEV] Reset code for ${contact}: ${resetCode}`);
 
       setStep('code');
     } catch {

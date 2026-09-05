@@ -25,16 +25,27 @@ export default function Home() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelled) return;
       if (!user) { setChecking(false); return; }
       supabase.from('profiles').select('role').eq('id', user.id).single().then(({ data }) => {
+        if (cancelled) return;
         if (data?.role === 'farmer') router.replace('/dashboard/farmer');
         else if (data?.role === 'buyer') router.replace('/dashboard/buyer');
         else if (data?.role === 'admin') router.replace('/dashboard/admin');
+        else if (!data) setChecking(false);
         else router.replace('/marketplace');
+      }).catch(() => {
+        if (!cancelled) setChecking(false);
       });
+    }).catch(() => {
+      if (!cancelled) setChecking(false);
     });
+    // Safety: never strand users on the spinner
+    const timeout = setTimeout(() => { if (!cancelled) setChecking(false); }, 8000);
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [router]);
 
   if (checking) {

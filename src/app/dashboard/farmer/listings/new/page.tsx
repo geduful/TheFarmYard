@@ -8,10 +8,6 @@ import type { Category } from '@/lib/types';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
 
-const categoryIcons: Record<string, string> = {
-  'Crops & Grains': '', 'Livestock': '', 'Poultry': '', 'Aquaculture': '', 'Other': '',
-};
-
 export default function NewListingPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
@@ -26,14 +22,18 @@ export default function NewListingPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    const parsedPrice = parseFloat(price);
+    if (!title.trim() || !quantity.trim()) { setError('Title and quantity are required.'); return; }
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError('Price must be greater than zero.'); return; }
+    if (imageUrl && !/^https?:\/\/.+/i.test(imageUrl.trim())) { setError('Image URL must start with http(s)://'); return; }
     setLoading(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
     const { error: insertError } = await supabase.from('listings').insert({
-      farmer_id: user.id, title, category, quantity_available: quantity,
-      price_per_unit: parseFloat(price), image_url: imageUrl || 'https://placehold.co/600x400?text=TheFarmYard',
-      description: description || null,
+      farmer_id: user.id, title: title.trim(), category, quantity_available: quantity.trim(),
+      price_per_unit: parsedPrice, image_url: imageUrl.trim() || 'https://placehold.co/600x400?text=TheFarmYard',
+      description: description.trim() || null,
     });
     if (insertError) { setError(insertError.message); setLoading(false); return; }
     router.push('/dashboard/farmer');

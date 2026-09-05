@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, EscrowTransaction, FarmerRating } from '@/lib/types';
+import type { Listing, EscrowTransaction, FarmerRating, Profile } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 
 export default function FarmerDashboard() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
   const [ratings, setRatings] = useState<FarmerRating[]>([]);

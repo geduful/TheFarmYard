@@ -243,7 +243,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-cream to-cream-dark rounded-xl">
                 <span className="text-sm text-gray-600">Account Age</span>
                 <span className="text-sm font-semibold text-gray-900">
-                  {Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30)) || 1} months
+                  {Math.max(1, Math.floor(accountAgeDays / 30))} months
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-cream to-cream-dark rounded-xl">

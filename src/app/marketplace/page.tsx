@@ -9,7 +9,65 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
-const categoryIcons: Record<string, string> = { 'Crops & Grains': '', Livestock: '', Poultry: '', Aquaculture: '', Other: '' };
+
+function FiltersPanel({
+  selectedCategory,
+  selectedLocation,
+  locations,
+  onSelectCategory,
+  onSelectLocation,
+}: {
+  selectedCategory: string;
+  selectedLocation: string;
+  locations: string[];
+  onSelectCategory: (c: string) => void;
+  onSelectLocation: (l: string) => void;
+}) {
+  return (
+    <>
+      <div className="mb-8">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-[0.15em] mb-3">Category</h3>
+        <div className="space-y-1">
+          {[{ key: '', label: 'All Categories' }, ...categories.map((c) => ({ key: c, label: c }))].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => onSelectCategory(key)}
+              className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
+                selectedCategory === key ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-[0.15em] mb-3">Location</h3>
+        <div className="space-y-1">
+          <button
+            onClick={() => onSelectLocation('')}
+            className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
+              selectedLocation === '' ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            All Locations
+          </button>
+          {locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => onSelectLocation(loc)}
+              className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
+                selectedLocation === loc ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {loc}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function MarketplacePage() {
   const router = useRouter();
@@ -21,6 +79,7 @@ export default function MarketplacePage() {
   const [profile, setProfile] = useState<{ role: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const supabase = createClient();
@@ -40,8 +99,8 @@ export default function MarketplacePage() {
       if (selectedCategory) query = query.eq('category', selectedCategory);
 
       const { data } = await query;
-      setListings(data || []);
-      const uniqueLocations = [...new Set((data || []).map((l: any) => l.farmer?.farm_location).filter(Boolean))] as string[];
+      setListings((data || []) as Listing[]);
+      const uniqueLocations = [...new Set((data || []).map((l: Listing) => l.farmer?.farm_location).filter(Boolean))] as string[];
       setLocations(uniqueLocations);
       setLoading(false);
     }
@@ -66,7 +125,7 @@ export default function MarketplacePage() {
 
   function handleBuy(listing: Listing) {
     if (!profile) { router.push('/login'); return; }
-    if (profile.role === 'farmer') { alert('Farmers cannot purchase listings.'); return; }
+    if (profile.role === 'farmer') { setNotice('Farmers cannot purchase listings. Please use a buyer account.'); return; }
     const encoded = encodeURIComponent(JSON.stringify({ listingId: listing.id, farmerId: listing.farmer_id }));
     router.push(`/dashboard/buyer?checkout=${encoded}`);
   }
@@ -77,50 +136,15 @@ export default function MarketplacePage() {
     router.push('/');
   }
 
-  const FiltersPanel = () => (
-    <>
-      <div className="mb-8">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-[0.15em] mb-3">Category</h3>
-        <div className="space-y-1">
-          {[{ key: '', label: 'All Categories' }, ...categories.map((c) => ({ key: c, label: c }))].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => { setSelectedCategory(key); setShowMobileFilters(false); }}
-              className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
-                selectedCategory === key ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-[0.15em] mb-3">Location</h3>
-        <div className="space-y-1">
-          <button
-            onClick={() => { setSelectedLocation(''); setShowMobileFilters(false); }}
-            className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
-              selectedLocation === '' ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            All Locations
-          </button>
-          {locations.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => { setSelectedLocation(loc); setShowMobileFilters(false); }}
-              className={`flex items-center gap-2.5 w-full text-left text-sm px-3 py-2.5 rounded-xl transition-all font-medium ${
-                selectedLocation === loc ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {loc}
-            </button>
-          ))}
-        </div>
-      </div>
-    </>
-  );
+  function handleSelectCategory(c: string) {
+    setSelectedCategory(c);
+    setShowMobileFilters(false);
+  }
+
+  function handleSelectLocation(l: string) {
+    setSelectedLocation(l);
+    setShowMobileFilters(false);
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -157,11 +181,23 @@ export default function MarketplacePage() {
 
       <div className="flex-1 flex">
         <aside className="w-64 bg-white border-r border-gray-100 p-6 hidden md:block shrink-0">
-          <FiltersPanel />
+          <FiltersPanel
+            selectedCategory={selectedCategory}
+            selectedLocation={selectedLocation}
+            locations={locations}
+            onSelectCategory={handleSelectCategory}
+            onSelectLocation={handleSelectLocation}
+          />
         </aside>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
+            {notice && (
+              <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl flex items-center justify-between gap-2 animate-fade-in">
+                <span>{notice}</span>
+                <button onClick={() => setNotice('')} className="text-amber-500 hover:text-amber-700 font-bold" aria-label="Dismiss">✕</button>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-8">
               <div className="relative flex-1 max-w-lg">
                 <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -188,7 +224,13 @@ export default function MarketplacePage() {
                     <h2 className="font-semibold text-gray-900">Filters</h2>
                     <button onClick={() => setShowMobileFilters(false)} className="p-1 hover:bg-gray-100 rounded-lg transition"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
-                  <FiltersPanel />
+                  <FiltersPanel
+                    selectedCategory={selectedCategory}
+                    selectedLocation={selectedLocation}
+                    locations={locations}
+                    onSelectCategory={handleSelectCategory}
+                    onSelectLocation={handleSelectLocation}
+                  />
                 </div>
               </div>
             )}
