@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { uploadFile, WAYBILLS_BUCKET } from '@/lib/supabase/storage';
 import type { EscrowTransaction } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
@@ -34,15 +35,6 @@ export default function DispatchPage() {
     load();
   }, [params.id, router]);
 
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -57,16 +49,18 @@ export default function DispatchPage() {
     let waybillUrl: string | null = null;
     if (waybillFile) {
       try {
-        waybillUrl = await fileToBase64(waybillFile);
-      } catch {
-        setError('Failed to process waybill image. Please try again.');
+        waybillUrl = await uploadFile(WAYBILLS_BUCKET, waybillFile);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to upload waybill image. Please try again.');
         setSubmitting(false);
         return;
       }
     }
+    const dispatchedAt = new Date();
     const { error: updateError } = await supabase.from('escrow_transactions').update({
       vehicle_license_plate: licensePlate.trim(), driver_phone_number: driverPhone,
-      waybill_receipt_url: waybillUrl, status: 'dispatched', dispatched_at: new Date().toISOString(),
+      waybill_receipt_url: waybillUrl, status: 'dispatched', dispatched_at: dispatchedAt.toISOString(),
+      auto_release_at: new Date(dispatchedAt.getTime() + 48 * 60 * 60 * 1000).toISOString(),
     }).eq('id', params.id).eq('farmer_id', user.id).eq('status', 'held_in_escrow');
     if (updateError) { setError(updateError.message); setSubmitting(false); return; }
     router.push('/dashboard/farmer');

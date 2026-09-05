@@ -7,9 +7,40 @@ import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest,
 import { formatCurrency } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
+import { useToast } from '@/components/ui/Toast';
+import { useResolvedFileUrl } from '@/components/StorageImage';
+
+function DocPreview({ url, index }: { url: string; index: number }) {
+  const resolved = useResolvedFileUrl(url);
+  const looksImage = (u: string) =>
+    u.startsWith('data:image') || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u);
+  return (
+    <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+      {!resolved ? (
+        <div className="skeleton h-48 rounded-none" />
+      ) : looksImage(resolved) || url.startsWith('data:image') ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={resolved} alt={`Document ${index + 1}`} className="w-full h-auto object-contain max-h-[70vh]" />
+      ) : (
+        <div className="flex items-center gap-3 p-4">
+          <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-700 truncate">Document {index + 1}</p>
+            <p className="text-xs text-gray-500">Non-image file</p>
+          </div>
+          <a href={resolved} target="_blank" rel="noopener noreferrer"
+            className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition">Open</a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [listings, setListings] = useState<Listing[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
@@ -17,6 +48,7 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,7 +63,7 @@ export default function AdminDashboard() {
       const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
       if (!p) { setNoProfile(true); setLoading(false); return; }
       if (p.role !== 'admin') { router.push('/marketplace'); return; }
-      const { data: l } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false });
+      const { data: l, error: listingsError } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false });
       setListings(l || []);
       const { data: u } = await supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false });
       setUsers(u || []);
@@ -41,6 +73,7 @@ export default function AdminDashboard() {
       setPremiumRequests(pvr || []);
       const { data: rpts } = await supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false });
       setReports(rpts || []);
+      if (listingsError) setLoadError(`Listings failed to load: ${listingsError.message}`);
       setLoading(false);
     }
     load();
@@ -48,73 +81,97 @@ export default function AdminDashboard() {
 
   async function handleApprove(listingId: number) {
     const supabase = createClient();
-    await supabase.from('listings').update({ is_approved: true }).eq('id', listingId);
+    const { error } = await supabase.from('listings').update({ is_approved: true }).eq('id', listingId);
+    if (error) { showToast(error.message, 'error'); return; }
     setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, is_approved: true } : l)));
+    showToast('Listing approved.', 'success');
   }
 
   async function handleReject(listingId: number) {
     const supabase = createClient();
-    await supabase.from('listings').delete().eq('id', listingId);
+    const { error } = await supabase.from('listings').delete().eq('id', listingId);
+    if (error) { showToast(error.message, 'error'); return; }
     setListings((prev) => prev.filter((l) => l.id !== listingId));
+    showToast('Listing rejected and removed.', 'success');
   }
 
   async function handlePromote(listingId: number) {
     const supabase = createClient();
-    await supabase.from('listings').update({ is_promoted: true, promoted_at: new Date().toISOString() }).eq('id', listingId);
+    const { error } = await supabase.from('listings').update({ is_promoted: true, promoted_at: new Date().toISOString() }).eq('id', listingId);
+    if (error) { showToast(error.message, 'error'); return; }
     setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, is_promoted: true } : l)));
+    showToast('Listing promoted.', 'success');
   }
 
   async function handleVerify(userId: string) {
     const supabase = createClient();
-    await supabase.from('profiles').update({ is_verified: true }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ is_verified: true }).eq('id', userId);
+    if (error) { showToast(error.message, 'error'); return; }
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_verified: true } : u)));
+    showToast('User verified.', 'success');
   }
 
   async function handleToggleBlock(userId: string, currentBlocked: boolean) {
     const supabase = createClient();
-    await supabase.from('profiles').update({ is_blocked: !currentBlocked }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ is_blocked: !currentBlocked }).eq('id', userId);
+    if (error) { showToast(error.message, 'error'); return; }
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_blocked: !currentBlocked } : u)));
+    showToast(currentBlocked ? 'User unblocked.' : 'User blocked.', 'success');
   }
 
   async function handleDeleteUser(userId: string) {
     const supabase = createClient();
-    await supabase.from('profiles').delete().eq('id', userId);
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) { showToast(error.message, 'error'); return; }
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     setConfirmDelete(null);
+    showToast('User deleted.', 'success');
   }
 
   async function handleApproveVerification(requestId: number, profileId: string) {
     const supabase = createClient();
-    await supabase.from('profiles').update({ is_verified: true, verification_tier: 'verified' }).eq('id', profileId);
-    await supabase.from('verification_requests').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    const { error: profileError } = await supabase.from('profiles').update({ is_verified: true, verification_tier: 'verified' }).eq('id', profileId);
+    if (profileError) { showToast(profileError.message, 'error'); return; }
+    const { error } = await supabase.from('verification_requests').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
     setVerificationRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r)));
     setUsers((prev) => prev.map((u) => (u.id === profileId ? { ...u, is_verified: true, verification_tier: 'verified' } : u)));
+    showToast('Verification approved.', 'success');
   }
 
   async function handleRejectVerification(requestId: number) {
     const supabase = createClient();
-    await supabase.from('verification_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    const { error } = await supabase.from('verification_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
     setVerificationRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r)));
+    showToast('Verification rejected.', 'success');
   }
 
   async function handleUpdateReportStatus(reportId: number, status: 'under_review' | 'resolved' | 'dismissed') {
     const supabase = createClient();
-    await supabase.from('reports').update({ status, reviewed_at: new Date().toISOString() }).eq('id', reportId);
+    const { error } = await supabase.from('reports').update({ status, reviewed_at: new Date().toISOString() }).eq('id', reportId);
+    if (error) { showToast(error.message, 'error'); return; }
     setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+    showToast(`Report marked as ${status.replace('_', ' ')}.`, 'success');
   }
 
   async function handleApprovePremium(requestId: number, profileId: string) {
     const supabase = createClient();
-    await supabase.from('profiles').update({ verification_tier: 'premium' }).eq('id', profileId);
-    await supabase.from('premium_verification_requests').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    const { error: profileError } = await supabase.from('profiles').update({ verification_tier: 'premium' }).eq('id', profileId);
+    if (profileError) { showToast(profileError.message, 'error'); return; }
+    const { error } = await supabase.from('premium_verification_requests').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
     setPremiumRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r)));
     setUsers((prev) => prev.map((u) => (u.id === profileId ? { ...u, verification_tier: 'premium' } : u)));
+    showToast('Premium granted.', 'success');
   }
 
   async function handleRejectPremium(requestId: number, reason?: string) {
     const supabase = createClient();
-    await supabase.from('premium_verification_requests').update({ status: 'rejected', rejection_reason: reason || null, reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    const { error } = await supabase.from('premium_verification_requests').update({ status: 'rejected', rejection_reason: reason || null, reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
     setPremiumRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r)));
+    showToast('Premium request declined.', 'success');
   }
 
   if (loading) return <div className="p-6"><TableSkeleton rows={6} cols={4} /></div>;
@@ -184,6 +241,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs */}
+      {loadError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl animate-fade-in">
+          <strong>Couldn&apos;t load admin data.</strong> {loadError} — check that all Supabase migrations are applied and your account role is <code>admin</code>.
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-6">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100">
           {(['listings', 'users', 'verifications', 'premium', 'reports'] as const).map((tab) => {
@@ -756,23 +818,7 @@ export default function AdminDashboard() {
             <div className="flex-1 overflow-y-auto p-6">
               <div className="space-y-4">
                 {viewingDocs.document_urls?.map((url, i) => (
-                  <div key={i} className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                    {url.startsWith('data:image') ? (
-                      <img src={url} alt={`Document ${i + 1}`} className="w-full h-auto object-contain max-h-[70vh]" />
-                    ) : (
-                      <div className="flex items-center gap-3 p-4">
-                        <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-700 truncate">Document {i + 1}</p>
-                          <p className="text-xs text-gray-500">Non-image file</p>
-                        </div>
-                        <a href={url} target="_blank" rel="noopener noreferrer"
-                          className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition">Open</a>
-                      </div>
-                    )}
-                  </div>
+                  <DocPreview key={i} url={url} index={i} />
                 ))}
               </div>
             </div>

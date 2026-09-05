@@ -23,6 +23,9 @@ export interface Profile {
   is_blocked: boolean;
   verification_tier: VerificationTier;
   farm_location: string;
+  payout_account_bank?: string | null;
+  payout_account_number?: string | null;
+  payout_account_name?: string | null;
   created_at: string;
 }
 
@@ -103,6 +106,12 @@ export interface EscrowTransaction {
   total_buyer_paid: number;
   total_farmer_yield: number;
   platform_revenue: number;
+  currency: string;
+  flw_tx_ref: string | null;
+  flw_transaction_id: number | null;
+  paid_at: string | null;
+  payout_reference: string | null;
+  auto_release_at: string | null;
   status: EscrowStatus;
   delivery_token: string;
   vehicle_license_plate: string | null;

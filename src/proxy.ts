@@ -99,5 +99,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*|api/public).*)'],
+  // API routes handle their own auth (JSON 401s, webhook signatures, cron
+  // secrets) — the proxy must not 307 them to /login.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*|api/).*)'],
 };

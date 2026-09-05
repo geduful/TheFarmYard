@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { uploadFile, VERIFICATION_DOCS_BUCKET } from '@/lib/supabase/storage';
 import type { Profile, VerificationRequest, PremiumVerificationRequest } from '@/lib/types';
 import { PREMIUM_REQUIREMENTS } from '@/lib/types';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -59,19 +60,16 @@ export default function ProfilePage() {
   async function handleVerificationSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (verificationFiles.length === 0) { setVerificationError('Please upload at least one document.'); return; }
+    if (verificationFiles.length > 5) { setVerificationError('Maximum 5 documents.'); return; }
+    const oversized = verificationFiles.find((f) => f.size > 5 * 1024 * 1024);
+    if (oversized) { setVerificationError(`"${oversized.name}" exceeds 5MB.`); return; }
     setVerificationError('');
     setVerificationSubmitting(true);
     try {
       const supabase = createClient();
-      const documentUrls: string[] = [];
-      for (const file of verificationFiles) {
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        documentUrls.push(dataUrl);
-      }
+      const documentUrls = await Promise.all(
+        verificationFiles.map((file) => uploadFile(VERIFICATION_DOCS_BUCKET, file))
+      );
       const { data, error } = await supabase.from('verification_requests').insert({
         profile_id: profile?.id,
         document_urls: documentUrls,
@@ -84,7 +82,9 @@ export default function ProfilePage() {
       setShowVerificationModal(false);
       setVerificationFiles([]);
       setVerificationNotes('');
-    } catch { setVerificationError('Something went wrong.'); }
+    } catch (err) {
+      setVerificationError(err instanceof Error ? err.message : 'Something went wrong.');
+    }
     setVerificationSubmitting(false);
   }
 

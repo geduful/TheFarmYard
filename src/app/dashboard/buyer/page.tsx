@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, EscrowTransaction, Profile, ReportCategory } from '@/lib/types';
-import { formatCurrency, calculateEscrowFees, generateDeliveryToken } from '@/lib/utils';
+import { formatCurrency, calculateEscrowFees } from '@/lib/utils';
 import EscrowTracker from '@/components/EscrowTracker';
+import StorageImage from '@/components/StorageImage';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 
@@ -92,20 +93,31 @@ function BuyerDashboardContent() {
     if (!Number.isFinite(quantity) || quantity < 1) { setCheckoutError('Quantity must be at least 1.'); return; }
     setCheckoutError('');
     setCheckoutLoading(true);
-    const baseAmount = checkoutListing.price_per_unit * quantity;
-    const fees = calculateEscrowFees(baseAmount);
-    const token = generateDeliveryToken();
-    const supabase = createClient();
-    const { data: inserted, error: insertError } = await supabase.from('escrow_transactions').insert({
-      listing_id: checkoutListing.id, buyer_id: profile.id, farmer_id: checkoutListing.farmer_id,
-      base_amount: baseAmount, buyer_fee: fees.buyerFee, farmer_fee: fees.farmerFee,
-      total_buyer_paid: fees.totalBuyerPaid, total_farmer_yield: fees.totalFarmerYield,
-      platform_revenue: fees.platformRevenue, status: 'held_in_escrow', delivery_token: token,
-    }).select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').single();
-    if (insertError) { setCheckoutError(insertError.message); setCheckoutLoading(false); return; }
-    if (inserted) setTransactions((prev) => [inserted as EscrowTransaction, ...prev]);
-    setShowCheckout(false); setCheckoutListing(null); setQuantity(1); setCheckoutLoading(false);
-    router.replace('/dashboard/buyer');
+    try {
+      const res = await fetch('/api/escrow/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: checkoutListing.id, quantity }),
+      });
+      const json = await res.json() as {
+        error?: string;
+        demo?: boolean;
+        escrow?: EscrowTransaction;
+        paymentLink?: string;
+      };
+      if (!res.ok || json.error) { setCheckoutError(json.error || 'Checkout failed.'); setCheckoutLoading(false); return; }
+      if (json.paymentLink) {
+        // Real payment: hand off to the hosted Flutterwave page.
+        window.location.href = json.paymentLink;
+        return;
+      }
+      if (json.demo && json.escrow) setTransactions((prev) => [json.escrow as EscrowTransaction, ...prev]);
+      setShowCheckout(false); setCheckoutListing(null); setQuantity(1); setCheckoutLoading(false);
+      router.replace('/dashboard/buyer');
+    } catch {
+      setCheckoutError('Checkout failed. Please try again.');
+      setCheckoutLoading(false);
+    }
   }
 
   async function handleReportSubmit(e: React.FormEvent) {
@@ -232,6 +244,25 @@ function BuyerDashboardContent() {
         </div>
       )}
 
+      {searchParams.get('payment') === 'success' && (
+        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
+          <span><strong>Payment confirmed.</strong> Your funds are now held securely in escrow.</span>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+        </div>
+      )}
+      {(searchParams.get('payment') === 'failed' || searchParams.get('payment') === 'error') && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
+          <span><strong>Payment not completed.</strong> No money left your account — please try again.</span>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+        </div>
+      )}
+      {searchParams.get('payment') === 'cancelled' && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
+          <span>Payment was cancelled. Your order was not created.</span>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
           <span className="w-1.5 h-5 rounded-full bg-farm-green" />
@@ -293,6 +324,13 @@ function BuyerDashboardContent() {
                   </div>
                 </div>
 
+                {tx.status === 'pending_deposit' && (
+                  <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200 rounded-xl animate-fade-in">
+                    <p className="text-sm font-semibold text-amber-800">Awaiting Payment</p>
+                    <p className="text-xs text-amber-700 mt-1">Complete payment to move funds into escrow. Unpaid orders are removed automatically.</p>
+                  </div>
+                )}
+
                 {tx.status === 'held_in_escrow' && (
                   <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl animate-fade-in">
                     <p className="text-sm font-semibold text-blue-800 flex items-center gap-1.5">Your Secure Delivery Token</p>
@@ -314,6 +352,12 @@ function BuyerDashboardContent() {
                         <span className="font-medium text-purple-900">{tx.driver_phone_number}</span>
                       </div>
                     </div>
+                    {tx.waybill_receipt_url && (
+                      <div className="mt-3 bg-white/60 rounded-lg p-3">
+                        <span className="text-xs text-purple-500 block mb-1.5">Waybill Receipt</span>
+                        <StorageImage url={tx.waybill_receipt_url} alt="Waybill receipt" className="max-h-48 rounded-lg object-contain" />
+                      </div>
+                    )}
                     <p className="text-xs text-purple-600 mt-3">Inspect goods within <strong>2 hours</strong> of delivery. Do NOT share the delivery token until verified.</p>
                   </div>
                 )}

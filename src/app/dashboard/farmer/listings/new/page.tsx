@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { uploadFile, LISTING_IMAGES_BUCKET } from '@/lib/supabase/storage';
 import type { Category } from '@/lib/types';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
@@ -16,6 +17,8 @@ export default function NewListingPage() {
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,9 +33,19 @@ export default function NewListingPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
+    let finalImageUrl = imageUrl.trim() || 'https://placehold.co/600x400?text=TheFarmYard';
+    if (imageFile) {
+      try {
+        finalImageUrl = await uploadFile(LISTING_IMAGES_BUCKET, imageFile, { publicBucket: true });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Image upload failed.');
+        setLoading(false);
+        return;
+      }
+    }
     const { error: insertError } = await supabase.from('listings').insert({
       farmer_id: user.id, title: title.trim(), category, quantity_available: quantity.trim(),
-      price_per_unit: parsedPrice, image_url: imageUrl.trim() || 'https://placehold.co/600x400?text=TheFarmYard',
+      price_per_unit: parsedPrice, image_url: finalImageUrl,
       description: description.trim() || null,
     });
     if (insertError) { setError(insertError.message); setLoading(false); return; }
@@ -96,10 +109,27 @@ export default function NewListingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Image URL</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Product Photo</label>
+            <input type="file" accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                if (file && file.size > 5 * 1024 * 1024) { setError('Photo must be under 5MB.'); return; }
+                setImageFile(file);
+                setImagePreview(file ? URL.createObjectURL(file) : null);
+              }}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-farm-green/10 file:text-farm-green file:font-semibold hover:file:bg-farm-green/20" />
+            {imagePreview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreview} alt="Preview" className="mt-2 h-32 rounded-xl object-cover" />
+            )}
+            <p className="text-xs text-gray-400 mt-1.5">Upload a photo, or paste an image URL below. Uploads are stored securely.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Image URL (optional alternative)</label>
             <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+              placeholder="https://..." disabled={!!imageFile}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white disabled:opacity-50" />
             <p className="text-xs text-gray-400 mt-1.5">Leave empty to use a placeholder image.</p>
           </div>
 

@@ -14,6 +14,9 @@ export default function EditProfilePage() {
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [location, setLocation] = useState('');
+  const [payoutBank, setPayoutBank] = useState('');
+  const [payoutNumber, setPayoutNumber] = useState('');
+  const [payoutName, setPayoutName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -29,6 +32,9 @@ export default function EditProfilePage() {
       setFullName(p?.full_name || '');
       setPhoneNumber(p?.phone_number || '');
       setLocation(p?.farm_location || '');
+      setPayoutBank(p?.payout_account_bank || '');
+      setPayoutNumber(p?.payout_account_number || '');
+      setPayoutName(p?.payout_account_name || '');
       setLoading(false);
     }
     load();
@@ -41,7 +47,14 @@ export default function EditProfilePage() {
     if (!profile) { setError('Profile not found. Please sign up again.'); return; }
     setSaving(true);
     const supabase = createClient();
-    const { error: updateError } = await supabase.from('profiles').update({ full_name: fullName, phone_number: phoneNumber, farm_location: location }).eq('id', profile?.id);
+    const { error: updateError } = await supabase.from('profiles').update({
+      full_name: fullName,
+      phone_number: phoneNumber,
+      farm_location: location,
+      payout_account_bank: payoutBank.trim() || null,
+      payout_account_number: payoutNumber.trim() || null,
+      payout_account_name: payoutName.trim() || null,
+    }).eq('id', profile?.id);
     if (updateError) { setError(updateError.message); setSaving(false); return; }
     setSuccess(true);
     setSaving(false);
@@ -94,6 +107,24 @@ export default function EditProfilePage() {
             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
           </div>
+
+          {profile?.role === 'farmer' && (
+            <div className="mb-6 p-4 bg-gradient-to-br from-cream to-cream-dark rounded-xl border border-cream-dark/50">
+              <p className="text-sm font-semibold text-gray-900 mb-1">Payout Details <span className="font-normal text-gray-400">(optional)</span></p>
+              <p className="text-xs text-gray-500 mb-3">Where released escrow funds are sent (MoMo number or bank account).</p>
+              <div className="space-y-3">
+                <input type="text" value={payoutBank} onChange={(e) => setPayoutBank(e.target.value)}
+                  placeholder="Bank / telco code (e.g. MTN)"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+                <input type="text" value={payoutNumber} onChange={(e) => setPayoutNumber(e.target.value)}
+                  placeholder="Account / MoMo number"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+                <input type="text" value={payoutName} onChange={(e) => setPayoutName(e.target.value)}
+                  placeholder="Account name"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <button type="submit" disabled={saving || success}
