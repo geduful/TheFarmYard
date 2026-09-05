@@ -38,6 +38,7 @@ export default function EditProfilePage() {
     e.preventDefault();
     setError('');
     setSuccess(false);
+    if (!profile) { setError('Profile not found. Please sign up again.'); return; }
     setSaving(true);
     const supabase = createClient();
     const { error: updateError } = await supabase.from('profiles').update({ full_name: fullName, phone_number: phoneNumber, farm_location: location }).eq('id', profile?.id);

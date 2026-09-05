@@ -77,12 +77,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Missing profile (e.g. signup trigger failed) — don't strand the user
-  if (!profile) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/signup';
-    return NextResponse.redirect(url);
-  }
+  // NOTE: no redirect when the profile row is missing (e.g. signup trigger
+  // hasn't run yet). Role checks below use `profile?.role`, so unknown roles
+  // safely fall through to /marketplace, while /dashboard/profile stays
+  // reachable so the user sees "Profile not found" instead of a bounce loop
+  // between /dashboard/* and /signup.
 
   if (pathname.startsWith('/dashboard/farmer') && profile?.role !== 'farmer') {
     return NextResponse.redirect(new URL('/marketplace', request.url));

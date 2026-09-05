@@ -58,6 +58,8 @@ function BuyerDashboardContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (!p) { setLoading(false); return; }
+      if (p.role === 'farmer') { router.push('/marketplace'); return; }
       setProfile(p);
 
       if (checkoutParam) {
@@ -148,6 +150,7 @@ function BuyerDashboardContent() {
   }
 
   if (loading) return <div className="p-6"><TableSkeleton rows={4} cols={3} /></div>;
+  if (!profile) return <div className="p-6 text-center text-gray-500">Profile not found. Please sign up again or contact support.</div>;
 
   const baseAmount = checkoutListing ? checkoutListing.price_per_unit * quantity : 0;
   const fees = checkoutListing ? calculateEscrowFees(baseAmount) : null;

@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const [premiumRequests, setPremiumRequests] = useState<PremiumVerificationRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [noProfile, setNoProfile] = useState(false);
   const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +29,8 @@ export default function AdminDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-      if (p?.role !== 'admin') { router.push('/marketplace'); return; }
+      if (!p) { setNoProfile(true); setLoading(false); return; }
+      if (p.role !== 'admin') { router.push('/marketplace'); return; }
       const { data: l } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false });
       setListings(l || []);
       const { data: u } = await supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false });
@@ -116,6 +118,7 @@ export default function AdminDashboard() {
   }
 
   if (loading) return <div className="p-6"><TableSkeleton rows={6} cols={4} /></div>;
+  if (noProfile) return <div className="p-6 text-center text-gray-500">Profile not found. Please sign up again or contact support.</div>;
 
   const pendingListings = listings.filter((l) => !l.is_approved);
   const unverifiedUsers = users.filter((u) => !u.is_verified);

@@ -23,8 +23,9 @@ export default function FarmerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (!p) { setLoading(false); return; }
       setProfile(p);
-      if (p?.role !== 'farmer') { router.push('/marketplace'); return; }
+      if (p.role !== 'farmer') { router.push('/marketplace'); return; }
       const { data: l } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('farmer_id', user.id).order('created_at', { ascending: false });
       setListings(l || []);
       const { data: t } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('farmer_id', user.id).order('created_at', { ascending: false });
@@ -37,6 +38,7 @@ export default function FarmerDashboard() {
   }, [router]);
 
   if (loading) return <div className="p-6 space-y-5"><TableSkeleton rows={6} cols={5} /></div>;
+  if (!profile) return <div className="p-6 text-center text-gray-500">Profile not found. Please <Link href="/signup" className="text-farm-green font-semibold hover:underline">create an account</Link> or contact support.</div>;
 
   const activeTransactions = transactions.filter((t) => !['released', 'refunded'].includes(t.status));
   const pendingAmount = transactions.filter((t) => t.status === 'held_in_escrow').reduce((sum, t) => sum + t.total_farmer_yield, 0);

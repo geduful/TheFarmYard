@@ -43,17 +43,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (cancelled) return;
-      if (!user) { router.push('/login'); return; }
+      if (!user) { router.push(`/login?redirect=${encodeURIComponent(pathname)}`); return; }
       supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
         if (!cancelled) setProfile(data);
       });
     });
     return () => { cancelled = true; };
-  }, [router]);
+  }, [router, pathname]);
 
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    router.refresh();
     router.push('/');
   }
 

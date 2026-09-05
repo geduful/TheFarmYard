@@ -37,6 +37,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isBlocked = searchParams.get('blocked') === '1';
+  const authFailed = searchParams.get('error') === 'auth_failed';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -57,7 +58,13 @@ function LoginPageContent() {
       setLoading(false);
       return;
     }
+    // Let the server (proxy) see the new session cookie before navigating,
+    // otherwise the first dashboard hit can bounce straight back to /login.
+    router.refresh();
+    const redirect = searchParams.get('redirect');
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) { router.push(redirect); return; }
     if (profile?.role === 'farmer') router.push('/dashboard/farmer');
+    else if (profile?.role === 'buyer') router.push('/dashboard/buyer');
     else if (profile?.role === 'admin') router.push('/dashboard/admin');
     else router.push('/marketplace');
   }
@@ -145,10 +152,10 @@ function LoginPageContent() {
           )}
 
           {/* Error */}
-          {error && (
+          {(error || authFailed) && (
             <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-alert-red text-sm rounded-xl flex items-center gap-2 animate-fade-in">
               <span className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-xs font-bold shrink-0">✕</span>
-              {error}
+              {error || 'Authentication failed. Please try signing in again.'}
             </div>
           )}
 

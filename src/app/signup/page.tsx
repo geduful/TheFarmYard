@@ -86,11 +86,13 @@ function SignupPageContent() {
   const [location, setLocation] = useState('');
   const [role, setRole] = useState<Role>(defaultRole === 'farmer' ? 'farmer' : 'buyer');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSuccess('');
     if (!fullName.trim() || !location.trim()) { setError('Full name and location are required.'); return; }
     if (phoneNumber.replace(/\D/g, '').length < 12) { setError('Enter a valid Ghana phone number (9 digits after +233).'); return; }
     setLoading(true);
@@ -101,7 +103,17 @@ function SignupPageContent() {
     });
     if (signUpError) { setError(signUpError.message); setLoading(false); return; }
     if (data.user?.identities?.length === 0) { setError('An account with this email already exists.'); setLoading(false); return; }
+    // If email confirmation is enabled there is no session yet — pushing to a
+    // protected dashboard would bounce straight back to /login. Tell the user
+    // to verify instead.
+    if (!data.session) {
+      setSuccess('Account created! Check your email to confirm, then sign in.');
+      setLoading(false);
+      return;
+    }
+    router.refresh();
     if (role === 'farmer') router.push('/dashboard/farmer');
+    else if (role === 'buyer') router.push('/dashboard/buyer');
     else router.push('/marketplace');
   }
 
@@ -223,6 +235,14 @@ function SignupPageContent() {
             <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-alert-red text-sm rounded-xl flex items-center gap-2 animate-fade-in">
               <span className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-xs font-bold shrink-0">✕</span>
               {error}
+            </div>
+          )}
+
+          {/* Success (e.g. email confirmation required) */}
+          {success && (
+            <div className="mb-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl flex items-center gap-2 animate-fade-in">
+              <span className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center text-xs font-bold shrink-0">✓</span>
+              {success}
             </div>
           )}
 
