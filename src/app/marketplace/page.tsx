@@ -80,32 +80,46 @@ export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [notice, setNotice] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    const supabase = createClient();
+    let cancelled = false;
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        setProfile(p);
+      setLoadError('');
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (user) {
+          const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+          if (!cancelled) setProfile(p);
+        }
+
+        let query = supabase
+          .from('listings')
+          .select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)')
+          .eq('is_approved', true)
+          .order('created_at', { ascending: false });
+
+        if (selectedCategory) query = query.eq('category', selectedCategory);
+
+        const { data, error } = await query;
+        if (cancelled) return;
+        if (error) throw new Error(error.message);
+        const rows = (data || []) as Listing[];
+        setListings(rows);
+        const uniqueLocations = [...new Set(rows.map((l) => l.farmer?.farm_location).filter(Boolean))] as string[];
+        setLocations(uniqueLocations);
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load listings.');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      let query = supabase
-        .from('listings')
-        .select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)')
-        .eq('is_approved', true)
-        .order('created_at', { ascending: false });
-
-      if (selectedCategory) query = query.eq('category', selectedCategory);
-
-      const { data } = await query;
-      setListings((data || []) as Listing[]);
-      const uniqueLocations = [...new Set((data || []).map((l: Listing) => l.farmer?.farm_location).filter(Boolean))] as string[];
-      setLocations(uniqueLocations);
-      setLoading(false);
     }
     load();
-  }, [selectedCategory]);
+    return () => { cancelled = true; };
+  }, [selectedCategory, retryKey]);
 
   const filteredListings = useMemo(() => {
     let result = selectedLocation
@@ -238,6 +252,20 @@ export default function MarketplacePage() {
             {loading ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {Array.from({ length: 8 }).map((_, i) => <CardSkeleton key={i} />)}
+              </div>
+            ) : loadError ? (
+              <div className="text-center py-24 animate-fade-in">
+                <div className="max-w-md mx-auto bg-white rounded-2xl shadow-sm border border-red-200 p-8">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Listings couldn&apos;t load</h3>
+                  <p className="text-sm text-red-600 mb-1">{loadError}</p>
+                  <p className="text-sm text-gray-500 mb-5">Check your connection and try again.</p>
+                  <button
+                    onClick={() => { setLoading(true); setRetryKey((k) => k + 1); }}
+                    className="px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm"
+                  >
+                    Reload listings
+                  </button>
+                </div>
               </div>
             ) : filteredListings.length === 0 ? (
               <div className="text-center py-32 animate-fade-in">
