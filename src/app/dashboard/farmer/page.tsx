@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, EscrowTransaction, FarmerRating, Profile } from '@/lib/types';
-import { formatCurrency } from '@/lib/utils';
+import type { Listing, EscrowTransaction, FarmerRating, Profile, BuyRequest } from '@/lib/types';
+import { formatCurrency, formatPriceUnit } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 
@@ -16,6 +16,8 @@ export default function FarmerDashboard() {
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
   const [ratings, setRatings] = useState<FarmerRating[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'listings' | 'requests'>('listings');
+  const [buyerRequests, setBuyerRequests] = useState<BuyRequest[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -32,6 +34,9 @@ export default function FarmerDashboard() {
       setTransactions(t || []);
       const { data: r } = await supabase.from('farmer_ratings').select('*, buyer:profiles!farmer_ratings_buyer_id_fkey(full_name)').eq('farmer_id', user.id).order('created_at', { ascending: false });
       setRatings(r || []);
+
+      const { data: br } = await supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false });
+      setBuyerRequests(br || []);
       setLoading(false);
     }
     load();
@@ -90,15 +95,81 @@ export default function FarmerDashboard() {
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          <span className="w-1.5 h-5 rounded-full bg-farm-green" />
-          My Listings
-        </h3>
-        <Link href="/dashboard/farmer/listings/new" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
-          + New Listing
-        </Link>
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('listings')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'listings' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            My Listings
+            {listings.length > 0 && <span className="ml-1.5 text-xs opacity-70">({listings.length})</span>}
+          </button>
+          <button onClick={() => setActiveTab('requests')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            Buyer Requests
+            {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
+          </button>
+        </div>
+        {activeTab === 'listings' && (
+          <Link href="/dashboard/farmer/listings/new" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
+            + New Listing
+          </Link>
+        )}
+        {activeTab === 'requests' && (
+          <Link href="/dashboard/farmer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
+            View All Requests
+          </Link>
+        )}
       </div>
 
+      {activeTab === 'requests' && (
+        <div className="mb-8">
+          {buyerRequests.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12 animate-fade-in">
+              <p className="text-gray-500 font-medium mb-1">No open buyer requests</p>
+              <p className="text-gray-400 text-sm mb-4">Check back later for buyer requests in your category.</p>
+              <Link href="/dashboard/farmer/requests" className="inline-flex px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+                View All Requests
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {buyerRequests.slice(0, 3).map((req) => {
+                const matchingListings = listings.filter((l) => l.category === req.category);
+                return (
+                  <div key={req.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover animate-fade-in">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-gray-900">{req.commodity_title}</h4>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Open</span>
+                        {matchingListings.length > 0 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            {matchingListings.length} match{matchingListings.length !== 1 ? 'es' : ''}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+                      <span className="font-medium text-farm-green bg-farm-green/10 px-2 py-0.5 rounded-full text-xs">{req.category}</span>
+                      <span>{req.quantity_required}</span>
+                      {req.max_price_per_unit && <span>Max {formatCurrency(req.max_price_per_unit)}{formatPriceUnit(req.price_unit)}</span>}
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                        {req.delivery_location}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {buyerRequests.length > 3 && (
+                <Link href="/dashboard/farmer/requests" className="block text-center py-3 text-sm font-medium text-farm-green hover:text-farm-green-light transition">
+                  View all {buyerRequests.length} requests →
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'listings' && (<>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
         {listings.length === 0 ? (
           <div className="text-center py-16">
@@ -184,6 +255,7 @@ export default function FarmerDashboard() {
           </div>
         )}
       </div>
+      </>)}
 
       {/* Buyer Ratings Section */}
       {ratings.length > 0 && (

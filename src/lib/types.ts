@@ -2,6 +2,10 @@ export type Role = 'farmer' | 'buyer' | 'admin';
 
 export type Category = 'Crops & Grains' | 'Livestock' | 'Poultry' | 'Aquaculture' | 'Other';
 
+export type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'highest_rated' | 'most_trusted' | 'recommended';
+
+export type PriceUnit = 'kg' | 'tonne' | 'bag' | 'crate' | 'box' | 'litre' | 'unit' | 'dozen' | 'bunch' | 'sack';
+
 export type EscrowStatus = 'pending_deposit' | 'held_in_escrow' | 'dispatched' | 'released' | 'disputed' | 'refunded';
 
 /**
@@ -62,13 +66,22 @@ export interface Listing {
   category: Category;
   quantity_available: string;
   price_per_unit: number;
+  price_unit: PriceUnit;
   image_url: string;
   description: string | null;
+  location: string;
+  quality_grade: string | null;
+  availability: string;
+  minimum_order: string | null;
+  harvest_date: string | null;
   is_approved: boolean;
   is_promoted: boolean;
   promoted_at: string | null;
   created_at: string;
-  farmer?: Pick<Profile, 'full_name' | 'farm_location' | 'is_verified'>;
+  farmer?: Pick<Profile, 'full_name' | 'farm_location' | 'is_verified' | 'verification_tier'>;
+  average_rating?: number;
+  total_ratings?: number;
+  trust_score?: number;
 }
 
 export interface VerificationRequest {
@@ -89,10 +102,15 @@ export interface BuyRequest {
   commodity_title: string;
   category: Category;
   quantity_required: string;
+  price_unit: PriceUnit;
+  max_price_per_unit: number | null;
   delivery_location: string;
   deadline: string;
   additional_notes: string | null;
+  status: 'open' | 'matched' | 'fulfilled' | 'expired' | 'cancelled';
   created_at: string;
+  buyer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location' | 'is_verified' | 'verification_tier'>;
+  match_count?: number;
 }
 
 export interface EscrowTransaction {
@@ -153,4 +171,33 @@ export interface FarmerRating {
   comment: string | null;
   created_at: string;
   buyer?: Pick<Profile, 'full_name'>;
+}
+
+export interface TrustScore {
+  score: number; // 0-100
+  breakdown: {
+    verificationTier: number;
+    averageRating: number;
+    completedTransactions: number;
+    accountAge: number;
+    listingQuality: number;
+  };
+}
+
+export interface BuyerRequestMatch {
+  listing: Listing;
+  score: number;
+  reasons: string[];
+}
+
+export interface FarmerProfileStats {
+  total_listings: number;
+  approved_listings: number;
+  total_transactions: number;
+  completed_transactions: number;
+  average_rating: number;
+  total_ratings: number;
+  trust_score: number;
+  verification_tier: VerificationTier;
+  account_age_days: number;
 }

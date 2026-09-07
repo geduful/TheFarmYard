@@ -1,26 +1,49 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { uploadFile, LISTING_IMAGES_BUCKET } from '@/lib/supabase/storage';
-import type { Category } from '@/lib/types';
+import type { Category, PriceUnit } from '@/lib/types';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
+const priceUnits: PriceUnit[] = ['kg', 'tonne', 'bag', 'crate', 'box', 'litre', 'unit', 'dozen', 'bunch', 'sack'];
 
 export default function NewListingPage() {
   const router = useRouter();
+  const [profile, setProfile] = useState<{ farm_location: string } | null>(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<Category>('Crops & Grains');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
+  const [priceUnit, setPriceUnit] = useState<PriceUnit>('unit');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [location, setLocation] = useState('');
+  const [qualityGrade, setQualityGrade] = useState('');
+  const [availability, setAvailability] = useState('In Stock');
+  const [minimumOrder, setMinimumOrder] = useState('');
+  const [harvestDate, setHarvestDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function loadProfile() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: p } = await supabase.from('profiles').select('farm_location').eq('id', user.id).single();
+        if (p) {
+          setProfile(p);
+          setLocation(p.farm_location || '');
+        }
+      }
+    }
+    loadProfile();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,8 +68,13 @@ export default function NewListingPage() {
     }
     const { error: insertError } = await supabase.from('listings').insert({
       farmer_id: user.id, title: title.trim(), category, quantity_available: quantity.trim(),
-      price_per_unit: parsedPrice, image_url: finalImageUrl,
+      price_per_unit: parsedPrice, price_unit: priceUnit, image_url: finalImageUrl,
       description: description.trim() || null,
+      location: location.trim() || profile?.farm_location || '',
+      quality_grade: qualityGrade.trim() || null,
+      availability,
+      minimum_order: minimumOrder.trim() || null,
+      harvest_date: harvestDate || null,
     });
     if (insertError) { setError(insertError.message); setLoading(false); return; }
     router.push('/dashboard/farmer');
@@ -97,7 +125,7 @@ export default function NewListingPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantity Available</label>
               <input type="text" value={quantity} onChange={(e) => setQuantity(e.target.value)}
-                placeholder="e.g., 50 Crates"
+                placeholder="e.g., 50"
                 className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
             </div>
             <div>
@@ -105,6 +133,55 @@ export default function NewListingPage() {
               <input type="number" value={price} onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00" step="0.01" min="0"
                 className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Price Unit</label>
+              <select value={priceUnit} onChange={(e) => setPriceUnit(e.target.value as PriceUnit)}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green bg-white text-sm">
+                {priceUnits.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Quality / Grade <span className="text-gray-400">(optional)</span></label>
+              <input type="text" value={qualityGrade} onChange={(e) => setQualityGrade(e.target.value)}
+                placeholder="e.g., Grade A, Premium, Fresh"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+              <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g., Accra, Kumasi"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Availability</label>
+              <select value={availability} onChange={(e) => setAvailability(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green bg-white text-sm">
+                <option value="In Stock">In Stock</option>
+                <option value="Pre-order">Pre-order</option>
+                <option value="Seasonal">Seasonal</option>
+                <option value="Limited">Limited</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Minimum Order <span className="text-gray-400">(optional)</span></label>
+              <input type="text" value={minimumOrder} onChange={(e) => setMinimumOrder(e.target.value)}
+                placeholder="e.g., 10 units"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Harvest Date <span className="text-gray-400">(optional)</span></label>
+              <input type="date" value={harvestDate} onChange={(e) => setHarvestDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
             </div>
           </div>
 

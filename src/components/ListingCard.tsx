@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { Listing } from '@/lib/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatPriceUnit } from '@/lib/utils';
 import StatusBadge from './ui/StatusBadge';
 
 interface ListingCardProps {
@@ -11,9 +12,22 @@ interface ListingCardProps {
 }
 
 export default function ListingCard({ listing, showActions, onBuy }: ListingCardProps) {
+  const router = useRouter();
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
-      <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition relative">
+      {listing.is_promoted && (
+        <div className="absolute top-2 left-2 z-10">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-lg">
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
+            Featured
+          </span>
+        </div>
+      )}
+      <div
+        className="aspect-[4/3] bg-gray-100 relative overflow-hidden cursor-pointer"
+        onClick={() => router.push(`/marketplace/${listing.id}`)}
+      >
         {listing.image_url ? (
           <img
             src={listing.image_url}
@@ -41,9 +55,14 @@ export default function ListingCard({ listing, showActions, onBuy }: ListingCard
             {listing.category}
           </span>
         </div>
-        <h3 className="font-semibold text-lg text-gray-900 mb-1">{listing.title}</h3>
+        <h3
+          className="font-semibold text-lg text-gray-900 mb-1 cursor-pointer hover:text-farm-green transition"
+          onClick={() => router.push(`/marketplace/${listing.id}`)}
+        >
+          {listing.title}
+        </h3>
         <p className="text-sm text-gray-500 mb-3">
-          {listing.farmer?.farm_location}
+          {listing.location || listing.farmer?.farm_location}
         </p>
 
         <div className="flex items-center justify-between mb-3">
@@ -51,7 +70,7 @@ export default function ListingCard({ listing, showActions, onBuy }: ListingCard
             <span className="text-lg font-bold text-farm-green">
               {formatCurrency(listing.price_per_unit)}
             </span>
-            <span className="text-sm text-gray-400"> / unit</span>
+            <span className="text-sm text-gray-400">{formatPriceUnit(listing.price_unit || 'unit')}</span>
           </div>
           <span className="text-sm text-gray-500">{listing.quantity_available}</span>
         </div>
@@ -61,12 +80,20 @@ export default function ListingCard({ listing, showActions, onBuy }: ListingCard
         )}
 
         {showActions && onBuy && (
-          <button
-            onClick={() => onBuy(listing)}
-            className="w-full py-2 bg-farm-green text-white font-medium rounded-lg hover:bg-farm-green-light transition text-sm"
-          >
-            Buy Securely via Escrow
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push(`/marketplace/${listing.id}`)}
+              className="flex-1 py-2 border border-farm-green text-farm-green font-medium rounded-lg hover:bg-farm-green/5 transition text-sm"
+            >
+              View Details
+            </button>
+            <button
+              onClick={() => onBuy(listing)}
+              className="flex-1 py-2 bg-farm-green text-white font-medium rounded-lg hover:bg-farm-green-light transition text-sm"
+            >
+              Buy Now
+            </button>
+          </div>
         )}
       </div>
     </div>

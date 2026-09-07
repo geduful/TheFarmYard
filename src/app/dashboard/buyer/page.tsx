@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, EscrowTransaction, Profile, ReportCategory } from '@/lib/types';
+import type { Listing, EscrowTransaction, Profile, ReportCategory, BuyRequest } from '@/lib/types';
 import { formatCurrency, calculateEscrowFees } from '@/lib/utils';
 import EscrowTracker from '@/components/EscrowTracker';
 import StorageImage from '@/components/StorageImage';
@@ -27,6 +27,8 @@ function BuyerDashboardContent() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
+  const [buyerRequests, setBuyerRequests] = useState<BuyRequest[]>([]);
 
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutListing, setCheckoutListing] = useState<Listing | null>(null);
@@ -75,6 +77,9 @@ function BuyerDashboardContent() {
 
       const { data: t } = await supabase.from('escrow_transactions').select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').eq('buyer_id', user.id).order('created_at', { ascending: false });
       setTransactions(t || []);
+
+      const { data: br } = await supabase.from('buy_requests').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false });
+      setBuyerRequests(br || []);
 
       // Load already-rated transaction IDs
       const { data: existingRatings } = await supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id);
@@ -264,11 +269,18 @@ function BuyerDashboardContent() {
       )}
 
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          <span className="w-1.5 h-5 rounded-full bg-farm-green" />
-          My Orders
-          {transactions.length > 0 && <span className="text-xs font-normal text-gray-400">({transactions.length})</span>}
-        </h3>
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('orders')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'orders' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            My Orders
+            {transactions.length > 0 && <span className="ml-1.5 text-xs opacity-70">({transactions.length})</span>}
+          </button>
+          <button onClick={() => setActiveTab('requests')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            My Requests
+            {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setReportTx(null); setReportCategory('other'); setReportSubject(''); setReportDescription(''); setReportError(''); setReportSuccess(false); setShowReportModal(true); }}
             className="px-4 py-2 bg-white text-alert-red text-sm font-semibold rounded-xl border border-red-200 hover:bg-red-50 transition shadow-sm flex items-center gap-2">
@@ -281,7 +293,63 @@ function BuyerDashboardContent() {
         </div>
       </div>
 
-      {transactions.length === 0 ? (
+      {activeTab === 'requests' && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-1.5 h-5 rounded-full bg-farm-green" />
+              Buyer Requests
+            </h3>
+            <Link href="/dashboard/buyer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+              + New Request
+            </Link>
+          </div>
+          {buyerRequests.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12 animate-fade-in">
+              <p className="text-gray-500 font-medium mb-1">No requests yet</p>
+              <p className="text-gray-400 text-sm mb-4">Post a buyer request to tell farmers what you need.</p>
+              <Link href="/dashboard/buyer/requests" className="inline-flex px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+                Create Request
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {buyerRequests.slice(0, 3).map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover animate-fade-in">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-gray-900">{req.commodity_title}</h4>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        req.status === 'open' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        req.status === 'matched' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                        'bg-gray-100 text-gray-500 border border-gray-200'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+                    <span className="font-medium text-farm-green bg-farm-green/10 px-2 py-0.5 rounded-full text-xs">{req.category}</span>
+                    <span>{req.quantity_required}</span>
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                      {req.delivery_location}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {buyerRequests.length > 3 && (
+                <Link href="/dashboard/buyer/requests" className="block text-center py-3 text-sm font-medium text-farm-green hover:text-farm-green-light transition">
+                  View all {buyerRequests.length} requests →
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'orders' && transactions.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-20 animate-fade-in">
           <h3 className="text-lg font-semibold text-gray-900 mb-1">No orders yet</h3>
           <p className="text-gray-500 text-sm mb-5">Browse the marketplace to find what you need.</p>

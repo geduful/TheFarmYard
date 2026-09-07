@@ -3,12 +3,20 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, Category } from '@/lib/types';
-import { formatCurrency } from '@/lib/utils';
-import StatusBadge from '@/components/ui/StatusBadge';
+import type { Listing, Category, SortOption } from '@/lib/types';
+import { formatCurrency, formatPriceUnit, sortByOption } from '@/lib/utils';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
+
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: 'recommended', label: 'Recommended' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'price_asc', label: 'Price: Low → High' },
+  { value: 'price_desc', label: 'Price: High → Low' },
+  { value: 'highest_rated', label: 'Highest Rated' },
+  { value: 'most_trusted', label: 'Most Trusted' },
+];
 
 function FiltersPanel({
   selectedCategory,
@@ -78,6 +86,7 @@ export default function MarketplacePage() {
   const [locations, setLocations] = useState<string[]>([]);
   const [profile, setProfile] = useState<{ role: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('recommended');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -131,11 +140,21 @@ export default function MarketplacePage() {
       result = result.filter((l) =>
         l.title.toLowerCase().includes(q) ||
         l.description?.toLowerCase().includes(q) ||
-        l.category.toLowerCase().includes(q)
+        l.category.toLowerCase().includes(q) ||
+        l.farmer?.full_name?.toLowerCase().includes(q) ||
+        l.location?.toLowerCase().includes(q)
       );
     }
+
+    result = sortByOption(
+      result,
+      sortBy,
+      (l) => (l as Listing & { average_rating?: number }).average_rating,
+      (l) => (l as Listing & { trust_score?: number }).trust_score,
+    );
+
     return result;
-  }, [listings, selectedLocation, searchQuery]);
+  }, [listings, selectedLocation, searchQuery, sortBy]);
 
   function handleBuy(listing: Listing) {
     if (!profile) { router.push('/login'); return; }
@@ -165,7 +184,7 @@ export default function MarketplacePage() {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/')} className="text-lg font-bold text-gray-900 hover:scale-105 transition-transform">TFY</button>
+            <button onClick={() => router.push('/')} className="hover:scale-105 transition-transform"><img src="/logo.png" alt="TheFarmYard" className="h-8 w-auto" /></button>
             <div className="h-5 w-px bg-gray-200" />
             <h1 className="font-bold text-gray-900">Marketplace</h1>
           </div>
@@ -217,7 +236,7 @@ export default function MarketplacePage() {
                 <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 <input
                   type="text"
-                  placeholder="Search listings..."
+                  placeholder="Search listings, farmers, locations..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/20 focus:border-farm-green shadow-sm"
@@ -225,6 +244,15 @@ export default function MarketplacePage() {
               </div>
           <div className="flex items-center gap-2 sm:gap-3">
                 <button onClick={() => setShowMobileFilters(true)} className="md:hidden px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium shadow-sm hover:bg-gray-50 transition">Filters</button>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-farm-green/20 shadow-sm"
+                >
+                  {sortOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
                 <div className="text-sm text-gray-500">
                   <span className="font-semibold text-gray-900">{filteredListings.length}</span> result{filteredListings.length !== 1 ? 's' : ''}
                 </div>
@@ -275,8 +303,19 @@ export default function MarketplacePage() {
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredListings.map((listing) => (
-                  <div key={listing.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden card-hover animate-fade-in">
-                    <div className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+                  <div key={listing.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden card-hover animate-fade-in relative">
+                    {listing.is_promoted && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-lg">
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
+                          Featured
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden cursor-pointer"
+                      onClick={() => router.push(`/marketplace/${listing.id}`)}
+                    >
                       {listing.image_url ? (
                         <img src={listing.image_url} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                       ) : (
@@ -285,9 +324,6 @@ export default function MarketplacePage() {
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="absolute top-3 left-3 flex flex-col gap-2">
-                        <StatusBadge type="approval" value={listing.is_approved} />
-                      </div>
                       {listing.farmer?.is_verified && (
                         <div className="absolute top-3 right-3">
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500 text-white shadow-lg">✓ Verified</span>
@@ -298,14 +334,19 @@ export default function MarketplacePage() {
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-semibold text-farm-green bg-farm-green/10 px-2.5 py-1 rounded-full">{listing.category}</span>
                         {listing.farmer?.farm_location && (
-                          <span className="text-xs text-gray-400">{listing.farmer.farm_location}</span>
+                          <span className="text-xs text-gray-400">{listing.location || listing.farmer.farm_location}</span>
                         )}
                       </div>
-                      <h3 className="font-semibold text-gray-900 text-base mb-1 leading-snug">{listing.title}</h3>
+                      <h3
+                        className="font-semibold text-gray-900 text-base mb-1 leading-snug cursor-pointer hover:text-farm-green transition"
+                        onClick={() => router.push(`/marketplace/${listing.id}`)}
+                      >
+                        {listing.title}
+                      </h3>
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <span className="text-xl font-bold text-farm-green">{formatCurrency(listing.price_per_unit)}</span>
-                          <span className="text-xs text-gray-400 ml-1">/ unit</span>
+                          <span className="text-xs text-gray-400 ml-1">{formatPriceUnit(listing.price_unit || 'unit')}</span>
                         </div>
                         <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
                           {listing.quantity_available}
@@ -315,9 +356,14 @@ export default function MarketplacePage() {
                         <p className="text-sm text-gray-500 mb-4 line-clamp-2 leading-relaxed">{listing.description}</p>
                       )}
                       {profile?.role === 'buyer' ? (
-                        <button onClick={() => handleBuy(listing)} className="w-full py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
-                          Buy Securely via Escrow
-                        </button>
+                        <div className="flex gap-2">
+                          <button onClick={() => router.push(`/marketplace/${listing.id}`)} className="flex-1 py-2.5 border border-farm-green text-farm-green font-semibold rounded-xl hover:bg-farm-green/5 transition text-sm">
+                            View Details
+                          </button>
+                          <button onClick={() => handleBuy(listing)} className="flex-1 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
+                            Buy Now
+                          </button>
+                        </div>
                       ) : !profile ? (
                         <button onClick={() => router.push('/login')} className="w-full py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
                           Sign In to Buy
