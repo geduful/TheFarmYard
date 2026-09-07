@@ -73,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </svg>
             </button>
             <Link href="/" className="flex items-center gap-2 hover:scale-105 transition-transform">
-              <Image src="/logo.png" alt="TheFarmYard Logo" width={44} height={44} className="object-contain" />
+              <Image src="/logo.webp" alt="TheFarmYard Logo" width={44} height={44} className="object-contain" />
               <span className="font-bold text-base text-farm-green hidden sm:block">TheFarmYard</span>
             </Link>
             {config && !isProfilePage && <span className="hidden sm:inline text-sm text-gray-300 mx-1">/</span>}

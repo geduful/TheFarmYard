@@ -137,7 +137,7 @@ function SignupPageContent() {
 
         {/* Top-left logo */}
         <Link href="/" className="absolute top-8 left-8 z-10 flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-          <Image src="/logo.png" alt="TheFarmYard Logo" width={52} height={52} className="object-contain" />
+          <Image src="/logo.webp" alt="TheFarmYard Logo" width={52} height={52} className="object-contain" />
           <span className="text-white font-semibold text-base tracking-tight">TheFarmYard</span>
         </Link>
 
@@ -177,9 +177,7 @@ function SignupPageContent() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 mb-7 hover:opacity-80 transition-opacity w-fit">
-            <div className="w-8 h-8 rounded-lg bg-farm-green flex items-center justify-center">
-              <LeafIcon className="w-4 h-4 text-white" />
-            </div>
+            <Image src="/logo.webp" alt="TheFarmYard Logo" width={32} height={32} className="object-contain rounded-lg" />
             <span className="text-farm-green font-semibold text-base tracking-tight">TheFarmYard</span>
           </Link>
 

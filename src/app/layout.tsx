@@ -17,8 +17,11 @@ export const metadata: Metadata = {
   title: "TheFarmYard - Agricultural Marketplace",
   description: "Connecting farmers directly to buyers across all agricultural sectors",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: [
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo.webp', sizes: 'any', type: 'image/webp' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
 };
 

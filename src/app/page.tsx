@@ -65,11 +65,11 @@ export default function Home() {
       <header className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <Image src="/logo.png" alt="TheFarmYard Logo" width={52} height={52} className="object-contain" priority />
+            <Image src="/logo.webp" alt="TheFarmYard Logo" width={52} height={52} className="object-contain" priority />
             <span className="text-lg font-bold text-farm-green tracking-tight">TheFarmYard</span>
           </Link>
           <nav className="flex items-center gap-2">
-            <Link href="/login" className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition rounded-lg hover:bg-gray-50">
+            <Link href="/login" className="px-5 py-2 text-sm font-semibold text-farm-green border border-farm-green/30 rounded-xl hover:bg-farm-green hover:text-white transition-all shadow-sm hover:shadow-md">
               Log In
             </Link>
             <Link href="/signup" className="px-5 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition-all shadow-sm hover:shadow-md">
@@ -82,8 +82,15 @@ export default function Home() {
       <main className="flex-1">
         <section className="relative min-h-[80vh] sm:min-h-[90vh] flex items-center overflow-hidden">
           <div className="absolute inset-0 bg-farm-green-dark">
-            <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-60"
-              style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1590682680695-43b964a3ae17?w=1600&q=80")' }} />
+            <Image
+              src="https://images.unsplash.com/photo-1590682680695-43b964a3ae17?w=1600&q=80"
+              alt=""
+              fill
+              className="object-cover opacity-60"
+              priority
+              sizes="100vw"
+              quality={75}
+            />
             <div className="absolute inset-0" style={{
               background: `
                 linear-gradient(to bottom, rgba(20,48,21,0.55) 0%, rgba(30,70,32,0.65) 50%, rgba(20,48,21,0.92) 100%),

@@ -25,14 +25,17 @@ interface StorageImageProps {
   url: string;
   alt: string;
   className?: string;
+  width?: number;
+  height?: number;
+  loading?: 'lazy' | 'eager';
 }
 
 /** Image that understands storage:// refs, public URLs, and legacy data: URLs. */
-export default function StorageImage({ url, alt, className }: StorageImageProps) {
+export default function StorageImage({ url, alt, className, width, height, loading = 'lazy' }: StorageImageProps) {
   const resolved = useResolvedFileUrl(url);
   if (!resolved) {
     return <div className={`skeleton ${className ?? ''}`} aria-label="Loading file" />;
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={resolved} alt={alt} className={className} />;
+  return <img src={resolved} alt={alt} className={className} width={width} height={height} loading={loading} />;
 }
