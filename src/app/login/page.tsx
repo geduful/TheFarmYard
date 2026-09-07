@@ -58,15 +58,15 @@ function LoginPageContent() {
       setLoading(false);
       return;
     }
-    // Let the server (proxy) see the new session cookie before navigating,
-    // otherwise the first dashboard hit can bounce straight back to /login.
-    router.refresh();
+    // Force a full page navigation so the middleware sees the new session cookie.
+    // router.refresh() is fire-and-forget and router.push() can race ahead before
+    // the server processes the cookie, bouncing the user straight back to /login.
     const redirect = searchParams.get('redirect');
-    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) { router.push(redirect); return; }
-    if (profile?.role === 'farmer') router.push('/dashboard/farmer');
-    else if (profile?.role === 'buyer') router.push('/dashboard/buyer');
-    else if (profile?.role === 'admin') router.push('/dashboard/admin');
-    else router.push('/marketplace');
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) { window.location.href = redirect; return; }
+    if (profile?.role === 'farmer') window.location.href = '/dashboard/farmer';
+    else if (profile?.role === 'buyer') window.location.href = '/dashboard/buyer';
+    else if (profile?.role === 'admin') window.location.href = '/dashboard/admin';
+    else window.location.href = '/marketplace';
   }
 
   return (

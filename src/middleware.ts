@@ -26,7 +26,7 @@ function isPublicFile(pathname: string): boolean {
   return /\.[a-zA-Z0-9]+$/.test(pathname);
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicFile(pathname) || isPublicPath(pathname)) {
