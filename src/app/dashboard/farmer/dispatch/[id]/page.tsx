@@ -17,6 +17,10 @@ export default function DispatchPage() {
   const [tx, setTx] = useState<EscrowTransaction | null>(null);
   const [licensePlate, setLicensePlate] = useState('');
   const [driverPhone, setDriverPhone] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [logisticsProvider, setLogisticsProvider] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [estimatedDelivery, setEstimatedDelivery] = useState('');
   const [waybillFile, setWaybillFile] = useState<File | null>(null);
   const [waybillPreview, setWaybillPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,40 @@ export default function DispatchPage() {
       auto_release_at: new Date(dispatchedAt.getTime() + 48 * 60 * 60 * 1000).toISOString(),
     }).eq('id', params.id).eq('farmer_id', user.id).eq('status', 'held_in_escrow');
     if (updateError) { setError(updateError.message); setSubmitting(false); return; }
+
+    // Create shipment record
+    const { data: shipmentData } = await supabase
+      .from('shipments')
+      .insert({
+        escrow_id: tx.id,
+        farmer_id: user.id,
+        buyer_id: tx.buyer_id,
+        driver_name: driverName.trim() || null,
+        driver_phone: driverPhone,
+        vehicle_license_plate: licensePlate.trim(),
+        logistics_provider_name: logisticsProvider.trim() || null,
+        pickup_location: tx.listing?.location || 'Farm',
+        destination: 'Buyer Location',
+        delivery_notes: deliveryNotes.trim() || null,
+        status: 'in_transit',
+        waybill_receipt_url: waybillUrl,
+        actual_pickup_at: dispatchedAt.toISOString(),
+        estimated_delivery_at: estimatedDelivery || null,
+      })
+      .select('id')
+      .single();
+
+    // Log initial shipment status
+    if (shipmentData) {
+      await supabase.from('shipment_status_history').insert({
+        shipment_id: shipmentData.id,
+        from_status: 'pending',
+        to_status: 'in_transit',
+        note: 'Goods dispatched',
+        changed_by: user.id,
+      });
+    }
+
     router.push('/dashboard/farmer');
   }
 
@@ -107,6 +145,30 @@ export default function DispatchPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Driver Phone Number</label>
             <PhoneInput value={driverPhone} onChange={setDriverPhone} required placeholder="Driver's number" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Driver Name (Optional)</label>
+            <input type="text" value={driverName} onChange={(e) => setDriverName(e.target.value)}
+              placeholder="e.g., Kofi Mensah"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Logistics Provider (Optional)</label>
+            <input type="text" value={logisticsProvider} onChange={(e) => setLogisticsProvider(e.target.value)}
+              placeholder="e.g., VIP Jeoun, MC Quantum"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Estimated Delivery Date</label>
+            <input type="datetime-local" value={estimatedDelivery} onChange={(e) => setEstimatedDelivery(e.target.value)}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Delivery Notes (Optional)</label>
+            <textarea value={deliveryNotes} onChange={(e) => setDeliveryNotes(e.target.value)}
+              placeholder="Special handling instructions, route details, etc."
+              rows={2}
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white resize-none" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Waybill Receipt Photo</label>

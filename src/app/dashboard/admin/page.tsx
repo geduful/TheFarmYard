@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, Report } from '@/lib/types';
-import { formatCurrency } from '@/lib/utils';
+import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, Report, Shipment, ShipmentStatusHistory } from '@/lib/types';
+import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -46,10 +46,12 @@ export default function AdminDashboard() {
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [premiumRequests, setPremiumRequests] = useState<PremiumVerificationRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipmentHistory, setShipmentHistory] = useState<Record<number, ShipmentStatusHistory[]>>({});
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingDocs, setViewingDocs] = useState<VerificationRequest | null>(null);
@@ -73,6 +75,25 @@ export default function AdminDashboard() {
       setPremiumRequests(pvr || []);
       const { data: rpts } = await supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false });
       setReports(rpts || []);
+
+      // Load shipments
+      const { data: s } = await supabase.from('shipments').select('*').order('created_at', { ascending: false });
+      setShipments(s || []);
+
+      // Load shipment history
+      if (s && s.length > 0) {
+        const historyMap: Record<number, ShipmentStatusHistory[]> = {};
+        for (const shipment of s) {
+          const { data: h } = await supabase
+            .from('shipment_status_history')
+            .select('*')
+            .eq('shipment_id', shipment.id)
+            .order('created_at', { ascending: true });
+          historyMap[shipment.id] = h || [];
+        }
+        setShipmentHistory(historyMap);
+      }
+
       if (listingsError) setLoadError(`Listings failed to load: ${listingsError.message}`);
       setLoading(false);
     }
@@ -248,13 +269,14 @@ export default function AdminDashboard() {
       )}
       <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
-          {(['listings', 'users', 'verifications', 'premium', 'reports'] as const).map((tab) => {
+          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
               users: unverifiedUsers.length + blockedUsers.length,
               verifications: pendingVerifications.length,
               premium: pendingPremiumRequests.length,
               reports: openReports.length,
+              logistics: shipments.filter((s) => !['delivery_confirmed', 'cancelled', 'failed'].includes(s.status)).length,
             };
             return (
               <button key={tab} onClick={() => setActiveTab(tab)}
@@ -276,10 +298,12 @@ export default function AdminDashboard() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   ) : tab === 'premium' ? (
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
+                  ) : tab === 'logistics' ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                   )}
-                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : 'Reports'}
+                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : 'Reports'}
                   {counts[tab] > 0 && (
                     <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
                       activeTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
@@ -763,6 +787,98 @@ export default function AdminDashboard() {
                 </div>
               );
             })
+          )}
+        </div>
+      )}
+
+      {/* Logistics Tab */}
+      {activeTab === 'logistics' && (
+        <div className="space-y-3 animate-fade-in">
+          {shipments.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-20 card-hover">
+              <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium">No shipments yet</p>
+              <p className="text-gray-400 text-sm mt-1">Shipments will appear here when farmers dispatch orders.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Logistics Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: 'Total Shipments', value: shipments.length, color: 'bg-purple-50 text-purple-700' },
+                  { label: 'In Transit', value: shipments.filter((s) => ['in_transit', 'out_for_delivery'].includes(s.status)).length, color: 'bg-blue-50 text-blue-700' },
+                  { label: 'Delivered', value: shipments.filter((s) => s.status === 'delivered').length, color: 'bg-emerald-50 text-emerald-700' },
+                  { label: 'Issues', value: shipments.filter((s) => ['delivery_issue', 'failed'].includes(s.status)).length, color: 'bg-red-50 text-red-700' },
+                ].map((stat, i) => (
+                  <div key={i} className={`${stat.color} rounded-xl p-4 border border-gray-100`}>
+                    <p className="text-2xl font-bold">{stat.value}</p>
+                    <p className="text-xs opacity-70 mt-0.5">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Shipments List */}
+              {shipments.map((shipment) => {
+                const progress = getShipmentProgress(shipment.status);
+                return (
+                  <div key={shipment.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 card-hover animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-10 rounded-full shrink-0 ${
+                          shipment.status === 'delivered' ? 'bg-emerald-500' :
+                          shipment.status === 'in_transit' ? 'bg-blue-500' :
+                          shipment.status === 'delivery_issue' ? 'bg-red-500' :
+                          'bg-gray-300'
+                        }`} />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-gray-900">Shipment #{shipment.id}</h4>
+                            <StatusBadge type="shipment" value={shipment.status} />
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Order #{shipment.escrow_id} · {formatShipmentTimestamp(shipment.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-farm-green rounded-full" style={{ width: `${progress}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-500">{progress}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-0.5">Pickup</p>
+                        <p className="font-medium text-gray-900 text-xs">{shipment.pickup_location}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-0.5">Destination</p>
+                        <p className="font-medium text-gray-900 text-xs">{shipment.destination}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-0.5">Driver</p>
+                        <p className="font-medium text-gray-900 text-xs">{shipment.driver_name || '—'} {shipment.driver_phone || ''}</p>
+                      </div>
+                    </div>
+
+                    {(shipment.logistics_provider_name || shipment.vehicle_license_plate) && (
+                      <div className="flex gap-3 text-xs text-gray-500 mt-2">
+                        {shipment.logistics_provider_name && <span>Provider: {shipment.logistics_provider_name}</span>}
+                        {shipment.vehicle_license_plate && <span>Vehicle: {shipment.vehicle_license_plate}</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

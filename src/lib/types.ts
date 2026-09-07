@@ -201,3 +201,80 @@ export interface FarmerProfileStats {
   verification_tier: VerificationTier;
   account_age_days: number;
 }
+
+// ─── Logistics Network ──────────────────────────────────────────────────────
+
+export type ShipmentStatus =
+  | 'pending'
+  | 'pickup_scheduled'
+  | 'assigned'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'delivery_confirmed'
+  | 'cancelled'
+  | 'failed'
+  | 'delivery_issue';
+
+export interface Shipment {
+  id: number;
+  escrow_id: number | null;
+  order_id: string | null;
+  farmer_id: string;
+  buyer_id: string;
+  logistics_provider_name: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  vehicle_license_plate: string | null;
+  pickup_location: string;
+  destination: string;
+  delivery_notes: string | null;
+  status: ShipmentStatus;
+  tracking_number: string | null;
+  waybill_receipt_url: string | null;
+  estimated_pickup_at: string | null;
+  estimated_delivery_at: string | null;
+  actual_pickup_at: string | null;
+  actual_delivery_at: string | null;
+  delivery_fee: number;
+  currency: string;
+  created_at: string;
+  updated_at: string;
+  escrow?: EscrowTransaction;
+  farmer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location'>;
+  buyer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location'>;
+}
+
+export interface ShipmentStatusHistory {
+  id: number;
+  shipment_id: number;
+  from_status: ShipmentStatus | null;
+  to_status: ShipmentStatus;
+  note: string | null;
+  changed_by: string | null;
+  created_at: string;
+  changed_by_profile?: Pick<Profile, 'full_name' | 'role'>;
+}
+
+export const SHIPMENT_STATUS_CONFIG: Record<ShipmentStatus, { label: string; color: string; icon: string }> = {
+  pending:            { label: 'Pending',              color: 'bg-gray-100 text-gray-600',      icon: 'clock' },
+  pickup_scheduled:   { label: 'Pickup Scheduled',     color: 'bg-blue-100 text-blue-700',      icon: 'calendar' },
+  assigned:           { label: 'Driver Assigned',      color: 'bg-indigo-100 text-indigo-700',  icon: 'user' },
+  in_transit:         { label: 'In Transit',           color: 'bg-purple-100 text-purple-700',  icon: 'truck' },
+  out_for_delivery:   { label: 'Out for Delivery',     color: 'bg-amber-100 text-amber-700',    icon: 'map' },
+  delivered:          { label: 'Delivered',             color: 'bg-emerald-100 text-emerald-700', icon: 'check-circle' },
+  delivery_confirmed: { label: 'Delivery Confirmed',   color: 'bg-green-100 text-green-700',    icon: 'check-double' },
+  cancelled:          { label: 'Cancelled',             color: 'bg-red-100 text-red-600',        icon: 'x-circle' },
+  failed:             { label: 'Failed',                color: 'bg-red-100 text-red-600',        icon: 'alert-triangle' },
+  delivery_issue:     { label: 'Delivery Issue',        color: 'bg-orange-100 text-orange-700',  icon: 'exclamation' },
+};
+
+export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
+  'pending',
+  'pickup_scheduled',
+  'assigned',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'delivery_confirmed',
+];

@@ -1,8 +1,9 @@
-import type { VerificationTier } from '@/lib/types';
+import type { VerificationTier, ShipmentStatus } from '@/lib/types';
+import { SHIPMENT_STATUS_CONFIG } from '@/lib/types';
 
 interface StatusBadgeProps {
-  type: 'approval' | 'verification' | 'tier' | 'escrow';
-  value: boolean | string | VerificationTier;
+  type: 'approval' | 'verification' | 'tier' | 'escrow' | 'shipment';
+  value: boolean | string | VerificationTier | ShipmentStatus;
   pending?: boolean;
 }
 
@@ -114,6 +115,18 @@ export default function StatusBadge({ type, value, pending }: StatusBadgeProps) 
 
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.classes}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── Shipment status badge ────────────────────────────────────────────────
+  if (type === 'shipment') {
+    const status = (typeof value === 'string' ? value : 'pending') as ShipmentStatus;
+    const cfg = SHIPMENT_STATUS_CONFIG[status] ?? SHIPMENT_STATUS_CONFIG.pending;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
         {cfg.label}
       </span>
     );

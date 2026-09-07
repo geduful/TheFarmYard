@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, EscrowTransaction, FarmerRating, Profile, BuyRequest } from '@/lib/types';
+import type { Listing, EscrowTransaction, FarmerRating, Profile, BuyRequest, Shipment, ShipmentStatusHistory } from '@/lib/types';
 import { formatCurrency, formatPriceUnit } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
+import ShipmentTracker from '@/components/ShipmentTracker';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 
 export default function FarmerDashboard() {
@@ -16,8 +17,10 @@ export default function FarmerDashboard() {
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
   const [ratings, setRatings] = useState<FarmerRating[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'listings' | 'requests'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'requests' | 'shipments'>('listings');
   const [buyerRequests, setBuyerRequests] = useState<BuyRequest[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipmentHistory, setShipmentHistory] = useState<Record<number, ShipmentStatusHistory[]>>({});
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,6 +40,25 @@ export default function FarmerDashboard() {
 
       const { data: br } = await supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false });
       setBuyerRequests(br || []);
+
+      // Load shipments
+      const { data: s } = await supabase.from('shipments').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false });
+      setShipments(s || []);
+
+      // Load shipment history for each shipment
+      if (s && s.length > 0) {
+        const historyMap: Record<number, ShipmentStatusHistory[]> = {};
+        for (const shipment of s) {
+          const { data: h } = await supabase
+            .from('shipment_status_history')
+            .select('*')
+            .eq('shipment_id', shipment.id)
+            .order('created_at', { ascending: true });
+          historyMap[shipment.id] = h || [];
+        }
+        setShipmentHistory(historyMap);
+      }
+
       setLoading(false);
     }
     load();
@@ -101,6 +123,11 @@ export default function FarmerDashboard() {
             My Listings
             {listings.length > 0 && <span className="ml-1.5 text-xs opacity-70">({listings.length})</span>}
           </button>
+          <button onClick={() => setActiveTab('shipments')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            Shipments
+            {shipments.length > 0 && <span className="ml-1.5 text-xs opacity-70">({shipments.length})</span>}
+          </button>
           <button onClick={() => setActiveTab('requests')}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Buyer Requests
@@ -164,6 +191,54 @@ export default function FarmerDashboard() {
                   View all {buyerRequests.length} requests →
                 </Link>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'shipments' && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-1.5 h-5 rounded-full bg-purple-500" />
+              Shipment Management
+            </h3>
+          </div>
+          {shipments.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12 animate-fade-in">
+              <div className="w-16 h-16 rounded-full bg-purple-50 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium mb-1">No shipments yet</p>
+              <p className="text-gray-400 text-sm">Shipments will appear here when you dispatch orders.</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {shipments.map((shipment) => (
+                <ShipmentTracker
+                  key={shipment.id}
+                  shipment={shipment}
+                  history={shipmentHistory[shipment.id] || []}
+                  userRole="farmer"
+                  onStatusUpdate={(newStatus: import('@/lib/types').ShipmentStatus) => {
+                    setShipments((prev) => prev.map((s) => s.id === shipment.id ? { ...s, status: newStatus } : s));
+                    setShipmentHistory((prev) => ({
+                      ...prev,
+                      [shipment.id]: [...(prev[shipment.id] || []), {
+                        id: Date.now(),
+                        shipment_id: shipment.id,
+                        from_status: shipment.status,
+                        to_status: newStatus,
+                        note: null,
+                        changed_by: profile?.id || null,
+                        created_at: new Date().toISOString(),
+                      }],
+                    }));
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>

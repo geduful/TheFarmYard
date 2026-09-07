@@ -1,3 +1,5 @@
+import type { ShipmentStatus } from './types';
+
 export function generateDeliveryToken(): string {
   // CSPRNG — Math.random is predictable and must not secure escrow tokens
   if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
@@ -123,4 +125,67 @@ export function sortByOption<T extends { created_at: string; price_per_unit?: nu
     default:
       return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
+}
+
+// ─── Logistics Utilities ─────────────────────────────────────────────────────
+
+export function getShipmentStatusIndex(status: ShipmentStatus): number {
+  const flow: ShipmentStatus[] = [
+    'pending', 'pickup_scheduled', 'assigned', 'in_transit',
+    'out_for_delivery', 'delivered', 'delivery_confirmed',
+  ];
+  return flow.indexOf(status);
+}
+
+export function getShipmentProgress(status: ShipmentStatus): number {
+  const idx = getShipmentStatusIndex(status);
+  if (idx < 0) return 0;
+  return Math.round((idx / 6) * 100);
+}
+
+export function isShipmentTerminal(status: ShipmentStatus): boolean {
+  return ['delivery_confirmed', 'cancelled', 'failed'].includes(status);
+}
+
+export function canUpdateShipmentStatus(current: ShipmentStatus, next: ShipmentStatus): boolean {
+  const transitions: Record<ShipmentStatus, ShipmentStatus[]> = {
+    pending:            ['pickup_scheduled', 'cancelled', 'failed'],
+    pickup_scheduled:   ['assigned', 'cancelled', 'failed'],
+    assigned:           ['in_transit', 'cancelled', 'failed'],
+    in_transit:         ['out_for_delivery', 'delivered', 'cancelled', 'failed', 'delivery_issue'],
+    out_for_delivery:   ['delivered', 'cancelled', 'failed', 'delivery_issue'],
+    delivered:          ['delivery_confirmed', 'delivery_issue'],
+    delivery_confirmed: [],
+    cancelled:          [],
+    failed:             [],
+    delivery_issue:     ['in_transit', 'out_for_delivery', 'delivered', 'cancelled'],
+  };
+  return transitions[current]?.includes(next) ?? false;
+}
+
+export function formatShipmentTimestamp(ts: string | null): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffHrs = diffMs / (1000 * 60 * 60);
+
+  if (diffHrs < 1) return 'Just now';
+  if (diffHrs < 24) return `${Math.floor(diffHrs)}h ago`;
+  if (diffHrs < 168) return `${Math.floor(diffHrs / 24)}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function getEstimatedArrival(estimatedDelivery: string | null): string {
+  if (!estimatedDelivery) return 'Not scheduled';
+  const d = new Date(estimatedDelivery);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays < 0) return 'Overdue';
+  if (diffDays < 1) return 'Today';
+  if (diffDays < 2) return 'Tomorrow';
+  if (diffDays < 7) return `In ${Math.ceil(diffDays)} days`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
