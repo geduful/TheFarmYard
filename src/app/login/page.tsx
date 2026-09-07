@@ -48,25 +48,33 @@ function LoginPageContent() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const supabase = createClient();
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) { setError(authError.message); setLoading(false); return; }
-    const { data: profile } = await supabase.from('profiles').select('role, is_blocked').eq('id', data.user.id).single();
-    if (profile?.is_blocked) {
-      await supabase.auth.signOut();
-      setError('Your account has been blocked. Please contact support.');
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+      const { data: profile } = await supabase.from('profiles').select('role, is_blocked').eq('id', data.user.id).single();
+      if (profile?.is_blocked) {
+        await supabase.auth.signOut();
+        setError('Your account has been blocked. Please contact support.');
+        return;
+      }
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+        window.location.href = redirect;
+        return;
+      }
+      if (profile?.role === 'farmer') window.location.href = '/dashboard/farmer';
+      else if (profile?.role === 'buyer') window.location.href = '/dashboard/buyer';
+      else if (profile?.role === 'admin') window.location.href = '/dashboard/admin';
+      else window.location.href = '/marketplace';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-    // Force a full page navigation so the middleware sees the new session cookie.
-    // router.refresh() is fire-and-forget and router.push() can race ahead before
-    // the server processes the cookie, bouncing the user straight back to /login.
-    const redirect = searchParams.get('redirect');
-    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) { window.location.href = redirect; return; }
-    if (profile?.role === 'farmer') window.location.href = '/dashboard/farmer';
-    else if (profile?.role === 'buyer') window.location.href = '/dashboard/buyer';
-    else if (profile?.role === 'admin') window.location.href = '/dashboard/admin';
-    else window.location.href = '/marketplace';
   }
 
   return (
