@@ -302,7 +302,7 @@ function BuyerDashboardContent() {
                     </div>
                     <p className="text-sm text-gray-500 mt-0.5">Farmer: {tx.farmer?.full_name || 'N/A'} &bull; Paid: {formatCurrency(tx.total_buyer_paid)}</p>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                     {tx.status === 'released' && !submittedRatings.has(tx.id) && (
                       <button onClick={() => { setRatingTx(tx); setRatingStars(0); setRatingComment(''); setRatingError(''); setShowRatingModal(true); }}
                         className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs font-semibold rounded-lg hover:from-amber-500 hover:to-amber-600 transition shadow-sm flex items-center gap-1.5">
@@ -377,7 +377,7 @@ function BuyerDashboardContent() {
           ))}
         </div>
       )}
-      <div className="mt-8 p-4 bg-gradient-to-br from-cream to-cream-dark rounded-2xl border border-cream-dark/50 flex items-center justify-between gap-4 animate-fade-in">
+      <div className="mt-8 p-4 bg-gradient-to-br from-cream to-cream-dark rounded-2xl border border-cream-dark/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
         <div>
           <p className="text-sm font-semibold text-gray-900">Buyer Policy</p>
           <p className="text-xs text-gray-500 mt-0.5">Know your protections, escrow process, and dispute rights.</p>

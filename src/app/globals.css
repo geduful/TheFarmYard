@@ -123,6 +123,20 @@ body {
 
 .text-balance { text-wrap: balance; }
 
+/* Touch-friendly tap targets on mobile */
+@media (max-width: 640px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+}
+
+/* Smooth scroll for mobile navigation */
+@supports (-webkit-overflow-scrolling: touch) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

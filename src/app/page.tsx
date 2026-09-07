@@ -80,7 +80,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+        <section className="relative min-h-[80vh] sm:min-h-[90vh] flex items-center overflow-hidden">
           <div className="absolute inset-0 bg-farm-green-dark">
             <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-60"
               style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1590682680695-43b964a3ae17?w=1600&q=80")' }} />
@@ -99,7 +99,7 @@ export default function Home() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-white/[0.03] rounded-full blur-3xl" />
           </div>
 
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 sm:py-40">
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-40">
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-sm font-medium text-white/90 mb-8 border border-white/10 animate-fade-in">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-soft" />
@@ -117,10 +117,10 @@ export default function Home() {
                 fair pricing, and trusted transactions across all agricultural sectors.
               </p>
               <div className="flex flex-wrap gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <Link href="/signup?role=farmer" className="group relative px-8 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all shadow-lg shadow-amber-600/25 hover:shadow-xl hover:shadow-amber-600/30 active:scale-[0.98]">
+                <Link href="/signup?role=farmer" className="group relative px-6 py-3 sm:px-8 sm:py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-amber-700 transition-all shadow-lg shadow-amber-600/25 hover:shadow-xl hover:shadow-amber-600/30 active:scale-[0.98]">
                   <span className="relative z-10 flex items-center gap-2">Start Selling<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg></span>
                 </Link>
-                <Link href="/signup?role=buyer" className="px-8 py-3.5 bg-white/10 backdrop-blur-md text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/10 shadow-lg">
+                <Link href="/signup?role=buyer" className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 backdrop-blur-md text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/10 shadow-lg">
                   <span className="flex items-center gap-2">Start Buying<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg></span>
                 </Link>
               </div>
@@ -330,10 +330,10 @@ export default function Home() {
               Join thousands of farmers and buyers already using TheFarmYard.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/signup?role=farmer" className="px-8 py-3.5 bg-white text-farm-green font-semibold rounded-xl hover:bg-cream transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">
+              <Link href="/signup?role=farmer" className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white text-farm-green font-semibold rounded-xl hover:bg-cream transition-all shadow-lg hover:shadow-xl active:scale-[0.98]">
                 <span className="flex items-center gap-2">Start as Farmer<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg></span>
               </Link>
-              <Link href="/signup?role=buyer" className="px-8 py-3.5 bg-white/10 backdrop-blur-md text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/10">
+              <Link href="/signup?role=buyer" className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 backdrop-blur-md text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/10">
                 <span className="flex items-center gap-2">Start as Buyer<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg></span>
               </Link>
             </div>

@@ -224,7 +224,7 @@ export default function FarmerDashboard() {
         </div>
       )}
 
-      <div className="mt-8 p-4 bg-gradient-to-br from-cream to-cream-dark rounded-2xl border border-cream-dark/50 flex items-center justify-between gap-4 animate-fade-in">
+      <div className="mt-8 p-4 bg-gradient-to-br from-cream to-cream-dark rounded-2xl border border-cream-dark/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
         <div>
           <p className="text-sm font-semibold text-gray-900">Farmer Policy</p>
           <p className="text-xs text-gray-500 mt-0.5">Review your obligations, payout terms, and listing guidelines.</p>

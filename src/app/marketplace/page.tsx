@@ -169,7 +169,7 @@ export default function MarketplacePage() {
             <div className="h-5 w-px bg-gray-200" />
             <h1 className="font-bold text-gray-900">Marketplace</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {profile?.role === 'farmer' && (
               <button onClick={() => router.push('/dashboard/farmer')} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition">Dashboard</button>
             )}
@@ -223,7 +223,7 @@ export default function MarketplacePage() {
                   className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/20 focus:border-farm-green shadow-sm"
                 />
               </div>
-              <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
                 <button onClick={() => setShowMobileFilters(true)} className="md:hidden px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium shadow-sm hover:bg-gray-50 transition">Filters</button>
                 <div className="text-sm text-gray-500">
                   <span className="font-semibold text-gray-900">{filteredListings.length}</span> result{filteredListings.length !== 1 ? 's' : ''}

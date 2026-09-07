@@ -215,7 +215,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3 text-sm bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-white/10">
+            <div className="hidden sm:flex items-center gap-3 text-sm bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-white/10">
               <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse shadow-lg shadow-emerald-400/50" />
               <span className="text-emerald-100/80">Live</span>
               <span className="w-px h-4 bg-white/10" />
@@ -246,8 +246,8 @@ export default function AdminDashboard() {
           <strong>Couldn&apos;t load admin data.</strong> {loadError} — check that all Supabase migrations are applied and your account role is <code>admin</code>.
         </div>
       )}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
           {(['listings', 'users', 'verifications', 'premium', 'reports'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
@@ -258,7 +258,7 @@ export default function AdminDashboard() {
             };
             return (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
                   activeTab === tab
                     ? tab === 'premium'
                       ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md'
@@ -444,7 +444,8 @@ export default function AdminDashboard() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {filtered.map((user) => (
                   <div key={user.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 card-hover animate-fade-in">
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
                       <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg ${
                         user.is_blocked
                           ? 'bg-gradient-to-br from-red-400 to-red-500 shadow-red-200'
@@ -491,6 +492,7 @@ export default function AdminDashboard() {
                             </p>
                           )}
                         </div>
+                      </div>
                       </div>
                       <div className="flex flex-col gap-2 shrink-0">
                         {!user.is_verified && user.role === 'farmer' && (

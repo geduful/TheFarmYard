@@ -331,12 +331,12 @@ function ForgotPasswordContent() {
               <form onSubmit={handleVerifyCode} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3 text-center">Enter 4-digit code</label>
-                  <div className="flex justify-center gap-3">
+                  <div className="flex justify-center gap-2 sm:gap-3">
                     {code.map((digit, i) => (
                       <input key={i} id={`code-${i}`} type="text" inputMode="numeric" maxLength={1} value={digit}
                         onChange={(e) => handleCodeChange(i, e.target.value)}
                         onKeyDown={(e) => handleCodeKeyDown(i, e)}
-                        className="w-14 h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-farm-green bg-white"
+                        className="w-12 h-12 sm:w-14 sm:h-14 text-center text-xl sm:text-2xl font-bold border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-farm-green bg-white"
                         required />
                     ))}
                   </div>
