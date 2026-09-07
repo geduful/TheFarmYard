@@ -63,16 +63,16 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <header className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group shrink-0">
-            <Image src="/logo.webp" alt="TheFarmYard Logo" width={40} height={40} className="object-contain sm:w-[52px] sm:h-[52px]" priority />
-            <span className="text-base sm:text-lg font-bold text-farm-green tracking-tight hidden sm:inline">TheFarmYard</span>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-2 group shrink min-w-0">
+            <Image src="/logo.webp" alt="TheFarmYard Logo" width={36} height={36} className="object-contain sm:w-[48px] sm:h-[48px] shrink-0" priority />
+            <span className="text-sm sm:text-lg font-bold text-farm-green tracking-tight whitespace-nowrap">TheFarmYard</span>
           </Link>
           <nav className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <Link href="/login" className="px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-farm-green border border-farm-green/30 rounded-xl hover:bg-farm-green hover:text-white transition-all shadow-sm hover:shadow-md">
+            <Link href="/login" className="px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-farm-green border border-farm-green/30 rounded-lg sm:rounded-xl hover:bg-farm-green hover:text-white transition-all shadow-sm hover:shadow-md whitespace-nowrap">
               Log In
             </Link>
-            <Link href="/signup" className="px-3 sm:px-5 py-1.5 sm:py-2 bg-farm-green text-white text-xs sm:text-sm font-semibold rounded-xl hover:bg-farm-green-light transition-all shadow-sm hover:shadow-md">
+            <Link href="/signup" className="px-3 sm:px-5 py-1.5 sm:py-2 bg-farm-green text-white text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl hover:bg-farm-green-light transition-all shadow-sm hover:shadow-md whitespace-nowrap">
               Get Started
             </Link>
           </nav>
