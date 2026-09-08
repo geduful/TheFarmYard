@@ -25,6 +25,7 @@ export interface Profile {
   role: Role;
   is_verified: boolean;
   is_blocked: boolean;
+  blocked_warning: string | null;
   verification_tier: VerificationTier;
   farm_location: string;
   payout_account_bank?: string | null;
@@ -94,6 +95,20 @@ export interface VerificationRequest {
   reviewed_at: string | null;
   reviewer_id: string | null;
   profile?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location' | 'role'>;
+}
+
+export interface ReRegistrationRequest {
+  id: number;
+  email: string;
+  full_name: string;
+  phone_number: string;
+  role: 'farmer' | 'buyer';
+  farm_location: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_notes: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewer_id: string | null;
 }
 
 export interface BuyRequest {

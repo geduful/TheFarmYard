@@ -89,6 +89,11 @@ function SignupPageContent() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [accountExists, setAccountExists] = useState(false);
+  const [showReRegForm, setShowReRegForm] = useState(false);
+  const [reRegLoading, setReRegLoading] = useState(false);
+  const [reRegSuccess, setReRegSuccess] = useState(false);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -102,7 +107,12 @@ function SignupPageContent() {
       options: { data: { full_name: fullName, phone_number: phoneNumber, role, farm_location: location } },
     });
     if (signUpError) { setError(signUpError.message); setLoading(false); return; }
-    if (data.user?.identities?.length === 0) { setError('An account with this email already exists.'); setLoading(false); return; }
+    if (data.user?.identities?.length === 0) {
+      setAccountExists(true);
+      setError('An account with this email already exists.');
+      setLoading(false);
+      return;
+    }
     // If email confirmation is enabled there is no session yet — pushing to a
     // protected dashboard would bounce straight back to /login. Tell the user
     // to verify instead.
@@ -115,6 +125,24 @@ function SignupPageContent() {
     if (role === 'farmer') router.push('/dashboard/farmer');
     else if (role === 'buyer') router.push('/dashboard/buyer');
     else router.push('/marketplace');
+  }
+
+  async function handleReRegistrationRequest(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setReRegLoading(true);
+    const supabase = createClient();
+    const { error: insertError } = await supabase.from('re_registration_requests').insert({
+      email,
+      full_name: fullName.trim(),
+      phone_number: phoneNumber,
+      role,
+      farm_location: location.trim(),
+      status: 'pending',
+    });
+    if (insertError) { setError(insertError.message); setReRegLoading(false); return; }
+    setReRegSuccess(true);
+    setReRegLoading(false);
   }
 
   return (
@@ -229,10 +257,77 @@ function SignupPageContent() {
           </div>
 
           {/* Error */}
-          {error && (
-            <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-alert-red text-sm rounded-xl flex items-center gap-2 animate-fade-in">
-              <span className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-xs font-bold shrink-0">✕</span>
-              {error}
+          {error && !showReRegForm && (
+            <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-alert-red text-sm rounded-xl animate-fade-in">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-5 h-5 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-xs font-bold shrink-0">✕</span>
+                {error}
+              </div>
+              {accountExists && !reRegSuccess && (
+                <button
+                  type="button"
+                  onClick={() => setShowReRegForm(true)}
+                  className="ml-7 text-farm-green font-semibold hover:underline underline-offset-2 text-sm"
+                >
+                  Request Re-registration &rarr;
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Re-registration form */}
+          {showReRegForm && !reRegSuccess && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl animate-fade-in">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
+                  <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <p className="text-sm font-semibold text-amber-800">Request Re-registration</p>
+              </div>
+              <p className="text-xs text-amber-700 mb-3">
+                Your account may have been blocked or deleted. Submit a request and the admin will review it.
+              </p>
+              {error && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">{error}</div>
+              )}
+              <form onSubmit={handleReRegistrationRequest} className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Full name" required
+                    className="px-3 py-2 border border-amber-200 rounded-lg bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="Phone number" required
+                    className="px-3 py-2 border border-amber-200 rounded-lg bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                </div>
+                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
+                  placeholder={role === 'farmer' ? 'Farm location' : 'Delivery region'} required
+                  className="w-full px-3 py-2 border border-amber-200 rounded-lg bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={reRegLoading}
+                    className="flex-1 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition disabled:opacity-50">
+                    {reRegLoading ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                  <button type="button" onClick={() => { setShowReRegForm(false); setError(''); }}
+                    className="px-4 py-2 text-amber-700 text-sm font-medium rounded-lg border border-amber-200 hover:bg-amber-100 transition">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Re-registration success */}
+          {reRegSuccess && (
+            <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl animate-fade-in">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
+                  <path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm font-semibold text-emerald-800">Request Submitted</p>
+              </div>
+              <p className="text-xs text-emerald-700">
+                Your re-registration request has been sent to the admin for review. You will be able to create your account once it is approved. You may close this page.
+              </p>
             </div>
           )}
 

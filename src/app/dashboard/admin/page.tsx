@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, Report, Shipment, ShipmentStatusHistory } from '@/lib/types';
+import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, Report, Shipment, ShipmentStatusHistory, ReRegistrationRequest } from '@/lib/types';
 import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -48,10 +48,11 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [shipmentHistory, setShipmentHistory] = useState<Record<number, ShipmentStatusHistory[]>>({});
+  const [reRegRequests, setReRegRequests] = useState<ReRegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingDocs, setViewingDocs] = useState<VerificationRequest | null>(null);
@@ -94,6 +95,10 @@ export default function AdminDashboard() {
         setShipmentHistory(historyMap);
       }
 
+      // Load re-registration requests
+      const { data: rr } = await supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false });
+      setReRegRequests(rr || []);
+
       if (listingsError) setLoadError(`Listings failed to load: ${listingsError.message}`);
       setLoading(false);
     }
@@ -134,9 +139,13 @@ export default function AdminDashboard() {
 
   async function handleToggleBlock(userId: string, currentBlocked: boolean) {
     const supabase = createClient();
-    const { error } = await supabase.from('profiles').update({ is_blocked: !currentBlocked }).eq('id', userId);
+    const update: Record<string, unknown> = { is_blocked: !currentBlocked };
+    if (currentBlocked) {
+      update.blocked_warning = 'Your account was recently unblocked by an admin. Please ensure you follow our platform policies to avoid being blocked again.';
+    }
+    const { error } = await supabase.from('profiles').update(update).eq('id', userId);
     if (error) { showToast(error.message, 'error'); return; }
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_blocked: !currentBlocked } : u)));
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_blocked: !currentBlocked, blocked_warning: currentBlocked ? (update.blocked_warning as string) : u.blocked_warning } : u)));
     showToast(currentBlocked ? 'User unblocked.' : 'User blocked.', 'success');
   }
 
@@ -195,6 +204,22 @@ export default function AdminDashboard() {
     showToast('Premium request declined.', 'success');
   }
 
+  async function handleApproveReReg(requestId: number) {
+    const supabase = createClient();
+    const { error } = await supabase.from('re_registration_requests').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
+    setReRegRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r)));
+    showToast('Re-registration approved. The user can now create their account.', 'success');
+  }
+
+  async function handleRejectReReg(requestId: number) {
+    const supabase = createClient();
+    const { error } = await supabase.from('re_registration_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', requestId);
+    if (error) { showToast(error.message, 'error'); return; }
+    setReRegRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r)));
+    showToast('Re-registration request declined.', 'success');
+  }
+
   if (loading) return <div className="p-6"><TableSkeleton rows={6} cols={4} /></div>;
   if (noProfile) return <div className="p-6 text-center text-gray-500">Profile not found. Please sign up again or contact support.</div>;
 
@@ -204,6 +229,7 @@ export default function AdminDashboard() {
   const pendingVerifications = verificationRequests.filter((r) => r.status === 'pending');
   const pendingPremiumRequests = premiumRequests.filter((r) => r.status === 'pending');
   const openReports = reports.filter((r) => r.status === 'open' || r.status === 'under_review');
+  const pendingReReg = reRegRequests.filter((r) => r.status === 'pending');
 
   const statCards = [
     { label: 'Total Listings', value: listings.length, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /></svg> },
@@ -269,7 +295,7 @@ export default function AdminDashboard() {
       )}
       <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
-          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics'] as const).map((tab) => {
+          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
               users: unverifiedUsers.length + blockedUsers.length,
@@ -277,6 +303,7 @@ export default function AdminDashboard() {
               premium: pendingPremiumRequests.length,
               reports: openReports.length,
               logistics: shipments.filter((s) => !['delivery_confirmed', 'cancelled', 'failed'].includes(s.status)).length,
+              reregistrations: pendingReReg.length,
             };
             return (
               <button key={tab} onClick={() => setActiveTab(tab)}
@@ -300,10 +327,12 @@ export default function AdminDashboard() {
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
                   ) : tab === 'logistics' ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                  ) : tab === 'reregistrations' ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" /></svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                   )}
-                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : 'Reports'}
+                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : 'Reports'}
                   {counts[tab] > 0 && (
                     <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
                       activeTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
@@ -875,6 +904,99 @@ export default function AdminDashboard() {
                         {shipment.vehicle_license_plate && <span>Vehicle: {shipment.vehicle_license_plate}</span>}
                       </div>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Re-registrations Tab */}
+      {activeTab === 'reregistrations' && (
+        <div className="space-y-3 animate-fade-in">
+          {reRegRequests.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-20 card-hover">
+              <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}>
+                  <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium">No re-registration requests</p>
+              <p className="text-gray-400 text-sm mt-1">When blocked or deleted users request to rejoin, their requests appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reRegRequests.map((req) => {
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+                  approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                  rejected: 'bg-red-50 text-red-700 border-red-200',
+                };
+                return (
+                  <div key={req.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 card-hover animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className={`w-2 h-10 rounded-full shrink-0 ${
+                            req.status === 'pending' ? 'bg-amber-400 shadow-sm shadow-amber-200' :
+                            req.status === 'approved' ? 'bg-emerald-500 shadow-sm shadow-emerald-200' :
+                            'bg-red-400 shadow-sm shadow-red-200'
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-gray-900">{req.full_name}</h4>
+                              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border capitalize ${statusColors[req.status]}`}>
+                                {req.status}
+                              </span>
+                              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border capitalize ${
+                                req.role === 'farmer' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}>
+                                {req.role}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-gray-500 ml-5">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>
+                            </span>
+                            {req.email}
+                          </span>
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
+                            </span>
+                            {req.phone_number}
+                          </span>
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                            </span>
+                            {req.farm_location}
+                          </span>
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <span className="text-gray-400">Requested {new Date(req.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      {req.status === 'pending' && (
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => handleApproveReReg(req.id)}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-green to-emerald-600 text-white text-xs font-semibold rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition shadow-sm active:scale-[0.97] flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}><path d="M5 13l4 4L19 7" /></svg>
+                            Approve
+                          </button>
+                          <button onClick={() => handleRejectReReg(req.id)}
+                            className="px-4 py-2 bg-white text-alert-red text-xs font-semibold rounded-lg border border-red-200 hover:bg-red-50 transition shadow-sm active:scale-[0.97] flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                            Ignore
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}

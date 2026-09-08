@@ -146,6 +146,13 @@ function BuyerDashboardContent() {
     }
   }
 
+  async function handleDismissWarning() {
+    if (!profile) return;
+    const supabase = createClient();
+    await supabase.from('profiles').update({ blocked_warning: null }).eq('id', profile.id);
+    setProfile({ ...profile, blocked_warning: null });
+  }
+
   async function handleReportSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!profile) { setReportError('Please sign in again.'); return; }
@@ -267,6 +274,29 @@ function BuyerDashboardContent() {
               <p className="text-sm text-gray-500 mt-0.5">Manage your orders and track deliveries</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {profile?.blocked_warning && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start justify-between gap-3 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <span className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
+                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Account Warning</p>
+              <p className="text-sm text-amber-700 mt-0.5">{profile.blocked_warning}</p>
+            </div>
+          </div>
+          <button onClick={handleDismissWarning}
+            className="text-amber-500 hover:text-amber-700 transition shrink-0 mt-0.5"
+            aria-label="Dismiss warning">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
+              <path d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
