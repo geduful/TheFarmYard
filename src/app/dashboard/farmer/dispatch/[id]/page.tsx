@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { uploadFile, WAYBILLS_BUCKET } from '@/lib/supabase/storage';
 import type { EscrowTransaction } from '@/lib/types';
@@ -177,7 +178,7 @@ export default function DispatchPage() {
             }`}>
               {waybillPreview ? (
                 <div className="space-y-3">
-                  <img src={waybillPreview} alt="Waybill preview" className="max-h-48 mx-auto rounded-lg object-contain" />
+                  <Image src={waybillPreview} alt="Waybill preview" width={400} height={300} unoptimized className="max-h-48 mx-auto rounded-lg object-contain" />
                   <div className="flex items-center justify-center gap-2">
                     <button type="button" onClick={() => { setWaybillFile(null); setWaybillPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
                       className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">

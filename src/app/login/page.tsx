@@ -1,21 +1,10 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
-
-function LeafIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <path d="M32 4C32 4 8 16 8 38C8 50 18 58 32 60C46 58 56 50 56 38C56 16 32 4 32 4Z" fill="currentColor" fillOpacity="0.9" />
-      <path d="M32 60V20" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      <path d="M32 36C26 32 18 30 14 28" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M32 44C38 40 46 38 50 36" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -34,7 +23,6 @@ export default function LoginPage() {
 }
 
 function LoginPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const isBlocked = searchParams.get('blocked') === '1';
   const authFailed = searchParams.get('error') === 'auth_failed';
@@ -256,6 +244,15 @@ function LoginPageContent() {
           >
             Create a free account
           </Link>
+
+          <div className="mt-4 text-center">
+            <Link
+              href="/signup?re_reg=1"
+              className="text-xs text-amber-600 hover:text-amber-700 font-medium hover:underline underline-offset-2 transition"
+            >
+              Have your account been blocked or deleted? Click here to request reactivation
+            </Link>
+          </div>
 
           <p className="text-center text-xs text-gray-400 mt-6 leading-relaxed">
             By signing in, you agree to our{' '}

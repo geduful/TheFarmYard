@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, Report, Shipment, ShipmentStatusHistory, ReRegistrationRequest } from '@/lib/types';
+import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, 
+Report, Shipment, ReRegistrationRequest } from '@/lib/types';
 import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -47,7 +48,6 @@ export default function AdminDashboard() {
   const [premiumRequests, setPremiumRequests] = useState<PremiumVerificationRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [shipmentHistory, setShipmentHistory] = useState<Record<number, ShipmentStatusHistory[]>>({});
   const [reRegRequests, setReRegRequests] = useState<ReRegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
@@ -80,20 +80,6 @@ export default function AdminDashboard() {
       // Load shipments
       const { data: s } = await supabase.from('shipments').select('*').order('created_at', { ascending: false });
       setShipments(s || []);
-
-      // Load shipment history
-      if (s && s.length > 0) {
-        const historyMap: Record<number, ShipmentStatusHistory[]> = {};
-        for (const shipment of s) {
-          const { data: h } = await supabase
-            .from('shipment_status_history')
-            .select('*')
-            .eq('shipment_id', shipment.id)
-            .order('created_at', { ascending: true });
-          historyMap[shipment.id] = h || [];
-        }
-        setShipmentHistory(historyMap);
-      }
 
       // Load re-registration requests
       const { data: rr } = await supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false });

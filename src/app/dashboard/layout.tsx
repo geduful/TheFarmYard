@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -38,6 +38,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
@@ -51,6 +53,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => { cancelled = true; };
   }, [router, pathname]);
 
+  // Lock body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
+
+  // Close sidebar on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && sidebarOpen) closeSidebar();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [sidebarOpen, closeSidebar]);
+
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -63,14 +84,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-30 shadow-sm">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
         <div className="flex items-center justify-between px-4 sm:px-6 h-14">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(!sidebarOpen)}
               className="md:hidden p-2 hover:bg-gray-50 rounded-lg transition" aria-label="Toggle sidebar">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              {sidebarOpen ? (
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
             </button>
             <Link href="/" className="flex items-center gap-2 hover:scale-105 transition-transform">
               <Image src="/logo.webp" alt="TheFarmYard Logo" width={44} height={44} className="object-contain" />
@@ -100,12 +127,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex flex-1 relative">
         {sidebarOpen && (
-          <div className="fixed inset-0 bg-black/30 z-40 md:hidden backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)} />
+          <div className="fixed inset-0 bg-black/40 z-40 md:hidden backdrop-blur-sm transition-opacity"
+            onClick={closeSidebar} />
         )}
 
-        <aside className={`w-64 bg-white border-r border-gray-100 flex-shrink-0 fixed md:sticky top-14 md:top-14 bottom-0 z-50 transform transition-transform duration-200 ease-out md:transform-none overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-          <div className="p-4">
+        <aside className={`w-64 bg-white border-r border-gray-100 flex-shrink-0 fixed md:sticky top-0 md:top-14 bottom-0 z-50 transform transition-transform duration-250 ease-out md:transform-none overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+          <div className="p-4 pt-18 md:pt-4">
             <div className="flex items-center gap-3 mb-5 p-3 bg-gradient-to-br from-farm-green to-farm-green-dark rounded-xl shadow-sm">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold shrink-0 backdrop-blur-sm">
                 {profile?.full_name?.charAt(0).toUpperCase() || '?'}
@@ -125,7 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {config.items.map((item) => {
                   const isActive = pathname === item.href;
                   return (
-                    <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
+                    <Link key={item.href} href={item.href} onClick={closeSidebar}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                         isActive ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}>
@@ -145,7 +172,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ].map((item) => {
                 const isActive = pathname === item.href;
                 return (
-                  <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
+                  <Link key={item.href} href={item.href} onClick={closeSidebar}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                       isActive ? 'bg-farm-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}>

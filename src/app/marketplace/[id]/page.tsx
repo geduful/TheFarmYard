@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, Profile, FarmerRating } from '@/lib/types';
 import { formatCurrency, formatPriceUnit, getTrustLevel } from '@/lib/utils';
@@ -123,7 +124,7 @@ export default function ListingDetailPage() {
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center">
-            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><img src="/logo.png" alt="TheFarmYard" className="h-8 w-auto" /></button>
+            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><Image src="/logo.png" alt="TheFarmYard" width={32} height={32} className="h-8 w-auto" /></button>
           </div>
         </header>
         <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -141,7 +142,7 @@ export default function ListingDetailPage() {
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center">
-            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><img src="/logo.png" alt="TheFarmYard" className="h-8 w-auto" /></button>
+            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><Image src="/logo.png" alt="TheFarmYard" width={32} height={32} className="h-8 w-auto" /></button>
           </div>
         </header>
         <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 text-center py-24 animate-fade-in">
@@ -164,7 +165,7 @@ export default function ListingDetailPage() {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><img src="/logo.png" alt="TheFarmYard" className="h-8 w-auto" /></button>
+            <button onClick={() => router.push('/marketplace')} className="hover:scale-105 transition-transform"><Image src="/logo.png" alt="TheFarmYard" width={32} height={32} className="h-8 w-auto" /></button>
             <div className="h-5 w-px bg-gray-200" />
             <button onClick={() => router.push('/marketplace')} className="text-sm text-gray-500 hover:text-gray-900 transition flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -197,7 +198,7 @@ export default function ListingDetailPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="aspect-[16/10] bg-gradient-to-br from-gray-50 to-gray-100 relative">
                 {listing.image_url ? (
-                  <img src={listing.image_url} alt={listing.title} className="w-full h-full object-cover" />
+                  <Image src={listing.image_url} alt={listing.title} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-300">
                     <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>

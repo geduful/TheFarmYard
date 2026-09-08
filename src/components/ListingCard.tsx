@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import type { Listing } from '@/lib/types';
 import { formatCurrency, formatPriceUnit } from '@/lib/utils';
 import StatusBadge from './ui/StatusBadge';
@@ -29,10 +30,11 @@ export default function ListingCard({ listing, showActions, onBuy }: ListingCard
         onClick={() => router.push(`/marketplace/${listing.id}`)}
       >
         {listing.image_url ? (
-          <img
+          <Image
             src={listing.image_url}
             alt={listing.title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400 text-4xl">
