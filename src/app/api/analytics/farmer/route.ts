@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 function getDateRange(period: string): string {
   const now = new Date();
@@ -40,7 +32,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new Date(request.url) ? request.nextUrl : { searchParams: new URLSearchParams() };
     const period = searchParams.get('period') || '30d';
-    const supabase = getSupabase();
+    const supabase = await createServerSupabaseClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
