@@ -23,11 +23,13 @@ CREATE INDEX IF NOT EXISTS idx_rereg_email ON re_registration_requests(email);
 ALTER TABLE re_registration_requests ENABLE ROW LEVEL SECURITY;
 
 -- Anyone can insert (unauthenticated users submitting requests)
+DROP POLICY IF EXISTS "rereg_insert_anyone" ON re_registration_requests;
 CREATE POLICY "rereg_insert_anyone"
   ON re_registration_requests FOR INSERT
   WITH CHECK (true);
 
 -- Admin can do everything
+DROP POLICY IF EXISTS "rereg_admin_all" ON re_registration_requests;
 CREATE POLICY "rereg_admin_all"
   ON re_registration_requests FOR ALL
   USING (

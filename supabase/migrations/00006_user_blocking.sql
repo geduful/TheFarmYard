@@ -20,6 +20,7 @@ CREATE POLICY "profiles_update_admin" ON profiles
   );
 
 -- 3. Admin policy: allow admin to DELETE any non-admin profile
+DROP POLICY IF EXISTS "profiles_delete_admin" ON profiles;
 CREATE POLICY "profiles_delete_admin" ON profiles
   FOR DELETE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')

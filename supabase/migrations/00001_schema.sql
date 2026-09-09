@@ -2,7 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. PROFILES TABLE (Role management and security verification)
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
     full_name TEXT NOT NULL,
     phone_number TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE profiles (
 );
 
 -- 2. LISTINGS TABLE (Universal agricultural marketplace items)
-CREATE TABLE listings (
+CREATE TABLE IF NOT EXISTS listings (
     id BIGSERIAL PRIMARY KEY,
     farmer_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     title TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE listings (
 );
 
 -- 3. BUY_REQUESTS TABLE (The Reverse Marketplace Engine)
-CREATE TABLE buy_requests (
+CREATE TABLE IF NOT EXISTS buy_requests (
     id BIGSERIAL PRIMARY KEY,
     buyer_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     commodity_title TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE buy_requests (
 );
 
 -- 4. ESCROW_TRANSACTIONS TABLE (The Monetized Safe Wallet Engine)
-CREATE TABLE escrow_transactions (
+CREATE TABLE IF NOT EXISTS escrow_transactions (
     id BIGSERIAL PRIMARY KEY,
     listing_id INT REFERENCES listings(id) ON DELETE SET NULL,
     buyer_id UUID REFERENCES profiles(id) NOT NULL,
@@ -73,26 +73,41 @@ ALTER TABLE buy_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE escrow_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: users can read all profiles, insert their own, update their own
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
 CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
 CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Listings: anyone can read approved listings, farmers manage their own
+DROP POLICY IF EXISTS "listings_select_approved" ON listings;
 CREATE POLICY "listings_select_approved" ON listings FOR SELECT USING (is_approved = true);
+DROP POLICY IF EXISTS "listings_select_own" ON listings;
 CREATE POLICY "listings_select_own" ON listings FOR SELECT USING (auth.uid() = farmer_id);
+DROP POLICY IF EXISTS "listings_insert" ON listings;
 CREATE POLICY "listings_insert" ON listings FOR INSERT WITH CHECK (auth.uid() = farmer_id);
+DROP POLICY IF EXISTS "listings_update" ON listings;
 CREATE POLICY "listings_update" ON listings FOR UPDATE USING (auth.uid() = farmer_id);
+DROP POLICY IF EXISTS "listings_delete" ON listings;
 CREATE POLICY "listings_delete" ON listings FOR DELETE USING (auth.uid() = farmer_id);
 
 -- Buy Requests: anyone can read, buyers manage their own
+DROP POLICY IF EXISTS "buy_requests_select" ON buy_requests;
 CREATE POLICY "buy_requests_select" ON buy_requests FOR SELECT USING (true);
+DROP POLICY IF EXISTS "buy_requests_insert" ON buy_requests;
 CREATE POLICY "buy_requests_insert" ON buy_requests FOR INSERT WITH CHECK (auth.uid() = buyer_id);
+DROP POLICY IF EXISTS "buy_requests_update" ON buy_requests;
 CREATE POLICY "buy_requests_update" ON buy_requests FOR UPDATE USING (auth.uid() = buyer_id);
+DROP POLICY IF EXISTS "buy_requests_delete" ON buy_requests;
 CREATE POLICY "buy_requests_delete" ON buy_requests FOR DELETE USING (auth.uid() = buyer_id);
 
 -- Escrow Transactions: participants can read their own
+DROP POLICY IF EXISTS "escrow_select_participant" ON escrow_transactions;
 CREATE POLICY "escrow_select_participant" ON escrow_transactions FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = farmer_id);
+DROP POLICY IF EXISTS "escrow_insert" ON escrow_transactions;
 CREATE POLICY "escrow_insert" ON escrow_transactions FOR INSERT WITH CHECK (auth.uid() = buyer_id);
+DROP POLICY IF EXISTS "escrow_update" ON escrow_transactions;
 CREATE POLICY "escrow_update" ON escrow_transactions FOR UPDATE USING (auth.uid() = buyer_id OR auth.uid() = farmer_id);
 
 -- Function to auto-create profile on signup

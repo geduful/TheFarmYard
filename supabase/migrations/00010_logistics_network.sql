@@ -85,31 +85,37 @@ ALTER TABLE shipments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipment_status_history ENABLE ROW LEVEL SECURITY;
 
 -- Farmers can see their own shipments
+DROP POLICY IF EXISTS "shipments_farmer_select" ON shipments;
 CREATE POLICY "shipments_farmer_select"
   ON shipments FOR SELECT
   USING (auth.uid() = farmer_id);
 
 -- Buyers can see their own shipments
+DROP POLICY IF EXISTS "shipments_buyer_select" ON shipments;
 CREATE POLICY "shipments_buyer_select"
   ON shipments FOR SELECT
   USING (auth.uid() = buyer_id);
 
 -- Farmers can insert shipments for their orders
+DROP POLICY IF EXISTS "shipments_farmer_insert" ON shipments;
 CREATE POLICY "shipments_farmer_insert"
   ON shipments FOR INSERT
   WITH CHECK (auth.uid() = farmer_id);
 
 -- Farmers can update their own shipments
+DROP POLICY IF EXISTS "shipments_farmer_update" ON shipments;
 CREATE POLICY "shipments_farmer_update"
   ON shipments FOR UPDATE
   USING (auth.uid() = farmer_id);
 
 -- Buyers can update limited fields (delivery confirmation)
+DROP POLICY IF EXISTS "shipments_buyer_update" ON shipments;
 CREATE POLICY "shipments_buyer_update"
   ON shipments FOR UPDATE
   USING (auth.uid() = buyer_id);
 
 -- Admin can do everything
+DROP POLICY IF EXISTS "shipments_admin_all" ON shipments;
 CREATE POLICY "shipments_admin_all"
   ON shipments FOR ALL
   USING (
@@ -117,6 +123,7 @@ CREATE POLICY "shipments_admin_all"
   );
 
 -- Status history: readable by shipment participants
+DROP POLICY IF EXISTS "shipment_history_select" ON shipment_status_history;
 CREATE POLICY "shipment_history_select"
   ON shipment_status_history FOR SELECT
   USING (
@@ -128,6 +135,7 @@ CREATE POLICY "shipment_history_select"
   );
 
 -- Status history: insertable by shipment participants
+DROP POLICY IF EXISTS "shipment_history_insert" ON shipment_status_history;
 CREATE POLICY "shipment_history_insert"
   ON shipment_status_history FOR INSERT
   WITH CHECK (
@@ -139,6 +147,7 @@ CREATE POLICY "shipment_history_insert"
   );
 
 -- Admin can see all history
+DROP POLICY IF EXISTS "shipment_history_admin_all" ON shipment_status_history;
 CREATE POLICY "shipment_history_admin_all"
   ON shipment_status_history FOR ALL
   USING (
@@ -156,6 +165,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_shipments_updated_at ON shipments;
 CREATE TRIGGER trg_shipments_updated_at
   BEFORE UPDATE ON shipments
   FOR EACH ROW
@@ -208,6 +218,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_validate_shipment_status ON shipments;
 CREATE TRIGGER trg_validate_shipment_status
   BEFORE UPDATE OF status ON shipments
   FOR EACH ROW

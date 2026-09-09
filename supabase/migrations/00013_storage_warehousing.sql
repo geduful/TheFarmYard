@@ -9,7 +9,7 @@
 
 -- ─── ENUM TYPES ─────────────────────────────────────────────────────────────
 
-CREATE TYPE storage_facility_type AS ENUM (
+CREATE TYPE IF NOT EXISTS storage_facility_type AS ENUM (
   'cold_storage',
   'dry_storage',
   'refrigerated',
@@ -17,13 +17,13 @@ CREATE TYPE storage_facility_type AS ENUM (
   'silo'
 );
 
-CREATE TYPE storage_facility_status AS ENUM (
+CREATE TYPE IF NOT EXISTS storage_facility_status AS ENUM (
   'active',
   'inactive',
   'maintenance'
 );
 
-CREATE TYPE storage_booking_status AS ENUM (
+CREATE TYPE IF NOT EXISTS storage_booking_status AS ENUM (
   'pending',
   'confirmed',
   'checked_in',
@@ -33,7 +33,7 @@ CREATE TYPE storage_booking_status AS ENUM (
   'cancelled'
 );
 
-CREATE TYPE storage_item_condition AS ENUM (
+CREATE TYPE IF NOT EXISTS storage_item_condition AS ENUM (
   'excellent',
   'good',
   'fair',
@@ -43,7 +43,7 @@ CREATE TYPE storage_item_condition AS ENUM (
 
 -- ─── STORAGE FACILITIES ─────────────────────────────────────────────────────
 
-CREATE TABLE storage_facilities (
+CREATE TABLE IF NOT EXISTS storage_facilities (
   id              BIGSERIAL PRIMARY KEY,
   name            TEXT NOT NULL,
   facility_type   storage_facility_type NOT NULL DEFAULT 'dry_storage',
@@ -71,10 +71,12 @@ CREATE TABLE storage_facilities (
 ALTER TABLE storage_facilities ENABLE ROW LEVEL SECURITY;
 
 -- Public can read approved active facilities
+DROP POLICY IF EXISTS "sf_select_public" ON storage_facilities;
 CREATE POLICY "sf_select_public" ON storage_facilities
   FOR SELECT USING (is_approved = true AND status = 'active');
 
 -- Admin can do everything
+DROP POLICY IF EXISTS "sf_admin_all" ON storage_facilities;
 CREATE POLICY "sf_admin_all" ON storage_facilities
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
@@ -89,13 +91,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_storage_facilities_updated_at ON storage_facilities;
 CREATE TRIGGER trg_storage_facilities_updated_at
   BEFORE UPDATE ON storage_facilities
   FOR EACH ROW EXECUTE FUNCTION update_storage_facility_updated_at();
 
 -- ─── STORAGE BOOKINGS ───────────────────────────────────────────────────────
 
-CREATE TABLE storage_bookings (
+CREATE TABLE IF NOT EXISTS storage_bookings (
   id                BIGSERIAL PRIMARY KEY,
   facility_id       BIGINT NOT NULL REFERENCES storage_facilities(id) ON DELETE CASCADE,
   farmer_id         UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -119,18 +122,22 @@ CREATE TABLE storage_bookings (
 ALTER TABLE storage_bookings ENABLE ROW LEVEL SECURITY;
 
 -- Farmer can read own bookings
+DROP POLICY IF EXISTS "sb_select_farmer" ON storage_bookings;
 CREATE POLICY "sb_select_farmer" ON storage_bookings
   FOR SELECT USING (auth.uid() = farmer_id);
 
 -- Farmer can insert own bookings
+DROP POLICY IF EXISTS "sb_insert_farmer" ON storage_bookings;
 CREATE POLICY "sb_insert_farmer" ON storage_bookings
   FOR INSERT WITH CHECK (auth.uid() = farmer_id);
 
 -- Farmer can update own bookings (for cancellation)
+DROP POLICY IF EXISTS "sb_update_farmer" ON storage_bookings;
 CREATE POLICY "sb_update_farmer" ON storage_bookings
   FOR UPDATE USING (auth.uid() = farmer_id);
 
 -- Admin can do everything
+DROP POLICY IF EXISTS "sb_admin_all" ON storage_bookings;
 CREATE POLICY "sb_admin_all" ON storage_bookings
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
@@ -145,13 +152,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_storage_bookings_updated_at ON storage_bookings;
 CREATE TRIGGER trg_storage_bookings_updated_at
   BEFORE UPDATE ON storage_bookings
   FOR EACH ROW EXECUTE FUNCTION update_storage_booking_updated_at();
 
 -- ─── STORAGE INVENTORY ──────────────────────────────────────────────────────
 
-CREATE TABLE storage_inventory (
+CREATE TABLE IF NOT EXISTS storage_inventory (
   id              BIGSERIAL PRIMARY KEY,
   booking_id      BIGINT NOT NULL REFERENCES storage_bookings(id) ON DELETE CASCADE,
   facility_id     BIGINT NOT NULL REFERENCES storage_facilities(id) ON DELETE CASCADE,
@@ -170,10 +178,12 @@ CREATE TABLE storage_inventory (
 ALTER TABLE storage_inventory ENABLE ROW LEVEL SECURITY;
 
 -- Farmer can read own inventory
+DROP POLICY IF EXISTS "si_select_farmer" ON storage_inventory;
 CREATE POLICY "si_select_farmer" ON storage_inventory
   FOR SELECT USING (auth.uid() = farmer_id);
 
 -- Admin can do everything
+DROP POLICY IF EXISTS "si_admin_all" ON storage_inventory;
 CREATE POLICY "si_admin_all" ON storage_inventory
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
@@ -200,6 +210,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_storage_booking_capacity ON storage_bookings;
 CREATE TRIGGER trg_storage_booking_capacity
   AFTER UPDATE OF status ON storage_bookings
   FOR EACH ROW EXECUTE FUNCTION update_facility_capacity_on_booking();
@@ -217,6 +228,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_storage_booking_capacity_insert ON storage_bookings;
 CREATE TRIGGER trg_storage_booking_capacity_insert
   AFTER INSERT ON storage_bookings
   FOR EACH ROW EXECUTE FUNCTION update_facility_capacity_on_insert();

@@ -36,11 +36,14 @@ CREATE TABLE IF NOT EXISTS password_reset_codes (
 
 ALTER TABLE password_reset_codes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "reset_codes_insert" ON password_reset_codes;
 CREATE POLICY "reset_codes_insert" ON password_reset_codes
     FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "reset_codes_select" ON password_reset_codes;
 CREATE POLICY "reset_codes_select" ON password_reset_codes
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "reset_codes_delete" ON password_reset_codes;
 CREATE POLICY "reset_codes_delete" ON password_reset_codes
     FOR DELETE USING (true);

@@ -37,24 +37,29 @@ CREATE TABLE IF NOT EXISTS premium_verification_requests (
 ALTER TABLE premium_verification_requests ENABLE ROW LEVEL SECURITY;
 
 -- Users: read & insert their own requests
+DROP POLICY IF EXISTS "pvr_select_own" ON premium_verification_requests;
 CREATE POLICY "pvr_select_own" ON premium_verification_requests
   FOR SELECT USING (auth.uid() = profile_id);
 
+DROP POLICY IF EXISTS "pvr_insert_own" ON premium_verification_requests;
 CREATE POLICY "pvr_insert_own" ON premium_verification_requests
   FOR INSERT WITH CHECK (auth.uid() = profile_id);
 
 -- Admin: read & update all premium requests
+DROP POLICY IF EXISTS "pvr_select_admin" ON premium_verification_requests;
 CREATE POLICY "pvr_select_admin" ON premium_verification_requests
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
+DROP POLICY IF EXISTS "pvr_update_admin" ON premium_verification_requests;
 CREATE POLICY "pvr_update_admin" ON premium_verification_requests
   FOR UPDATE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
 -- 4. Allow admin to update verification_tier on any profile
+DROP POLICY IF EXISTS "profiles_update_admin_tier" ON profiles;
 CREATE POLICY "profiles_update_admin_tier" ON profiles
   FOR UPDATE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')

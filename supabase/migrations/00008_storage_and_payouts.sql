@@ -19,22 +19,26 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Public read for listing images
+DROP POLICY IF EXISTS "listing_images_public_read" ON storage.objects;
 CREATE POLICY "listing_images_public_read" ON storage.objects
   FOR SELECT USING (bucket_id = 'listing-images');
 
 -- Authenticated users upload into their OWN folder only
+DROP POLICY IF EXISTS "listing_images_insert_own" ON storage.objects;
 CREATE POLICY "listing_images_insert_own" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'listing-images'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "listing_images_update_own" ON storage.objects;
 CREATE POLICY "listing_images_update_own" ON storage.objects
   FOR UPDATE USING (
     bucket_id = 'listing-images'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "listing_images_delete_own" ON storage.objects;
 CREATE POLICY "listing_images_delete_own" ON storage.objects
   FOR DELETE USING (
     bucket_id = 'listing-images'
@@ -42,12 +46,14 @@ CREATE POLICY "listing_images_delete_own" ON storage.objects
   );
 
 -- Waybills: owner insert, owner + admin read
+DROP POLICY IF EXISTS "waybills_insert_own" ON storage.objects;
 CREATE POLICY "waybills_insert_own" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'waybills'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "waybills_select_owner_admin" ON storage.objects;
 CREATE POLICY "waybills_select_owner_admin" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'waybills'
@@ -58,12 +64,14 @@ CREATE POLICY "waybills_select_owner_admin" ON storage.objects
   );
 
 -- Verification docs: owner insert, owner + admin read
+DROP POLICY IF EXISTS "verification_docs_insert_own" ON storage.objects;
 CREATE POLICY "verification_docs_insert_own" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'verification-docs'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "verification_docs_select_owner_admin" ON storage.objects;
 CREATE POLICY "verification_docs_select_owner_admin" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'verification-docs'

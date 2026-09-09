@@ -23,13 +23,17 @@ CREATE TABLE IF NOT EXISTS reports (
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 -- Users can read & insert their own reports
+DROP POLICY IF EXISTS "reports_select_own" ON reports;
 CREATE POLICY "reports_select_own" ON reports FOR SELECT USING (auth.uid() = reporter_id);
+DROP POLICY IF EXISTS "reports_insert_own" ON reports;
 CREATE POLICY "reports_insert_own" ON reports FOR INSERT WITH CHECK (auth.uid() = reporter_id);
 
 -- Admin can read and update all reports
+DROP POLICY IF EXISTS "reports_select_admin" ON reports;
 CREATE POLICY "reports_select_admin" ON reports FOR SELECT USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
+DROP POLICY IF EXISTS "reports_update_admin" ON reports;
 CREATE POLICY "reports_update_admin" ON reports FOR UPDATE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
@@ -54,6 +58,8 @@ CREATE TABLE IF NOT EXISTS farmer_ratings (
 ALTER TABLE farmer_ratings ENABLE ROW LEVEL SECURITY;
 
 -- Anyone can read ratings (shown publicly on farmer profile)
+DROP POLICY IF EXISTS "ratings_select_all" ON farmer_ratings;
 CREATE POLICY "ratings_select_all" ON farmer_ratings FOR SELECT USING (true);
 -- Only the buyer of that transaction can insert
+DROP POLICY IF EXISTS "ratings_insert_own" ON farmer_ratings;
 CREATE POLICY "ratings_insert_own" ON farmer_ratings FOR INSERT WITH CHECK (auth.uid() = buyer_id);

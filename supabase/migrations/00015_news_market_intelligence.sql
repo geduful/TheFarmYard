@@ -6,27 +6,27 @@
 -- 1. ENUMS
 -- ----------------------------------------------------------------
 
-CREATE TYPE news_source_type AS ENUM (
+CREATE TYPE IF NOT EXISTS news_source_type AS ENUM (
   'government', 'research', 'international', 'publication',
   'market_service', 'weather', 'news_org', 'ngo', 'other'
 );
 
-CREATE TYPE news_source_status AS ENUM ('active', 'inactive', 'pending');
+CREATE TYPE IF NOT EXISTS news_source_status AS ENUM ('active', 'inactive', 'pending');
 
-CREATE TYPE news_article_status AS ENUM (
+CREATE TYPE IF NOT EXISTS news_article_status AS ENUM (
   'pending', 'approved', 'published', 'rejected', 'archived'
 );
 
-CREATE TYPE opportunity_status AS ENUM (
+CREATE TYPE IF NOT EXISTS opportunity_status AS ENUM (
   'open', 'closed', 'expired', 'upcoming'
 );
 
-CREATE TYPE price_trend AS ENUM ('up', 'down', 'stable', 'unknown');
+CREATE TYPE IF NOT EXISTS price_trend AS ENUM ('up', 'down', 'stable', 'unknown');
 
 -- 2. TRUSTED SOURCES
 -- ----------------------------------------------------------------
 
-CREATE TABLE news_sources (
+CREATE TABLE IF NOT EXISTS news_sources (
   id            BIGSERIAL PRIMARY KEY,
   name          TEXT NOT NULL,
   website_url   TEXT,
@@ -46,17 +46,19 @@ CREATE TABLE news_sources (
 
 ALTER TABLE news_sources ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "news_sources_select_public" ON news_sources;
 CREATE POLICY "news_sources_select_public" ON news_sources FOR SELECT USING (status = 'active');
+DROP POLICY IF EXISTS "news_sources_admin_all" ON news_sources;
 CREATE POLICY "news_sources_admin_all" ON news_sources
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX idx_news_sources_status ON news_sources(status);
-CREATE INDEX idx_news_sources_source_type ON news_sources(source_type);
+CREATE INDEX IF NOT EXISTS idx_news_sources_status ON news_sources(status);
+CREATE INDEX IF NOT EXISTS idx_news_sources_source_type ON news_sources(source_type);
 
 -- 3. NEWS CATEGORIES
 -- ----------------------------------------------------------------
 
-CREATE TABLE news_categories (
+CREATE TABLE IF NOT EXISTS news_categories (
   id            BIGSERIAL PRIMARY KEY,
   name          TEXT NOT NULL UNIQUE,
   slug          TEXT NOT NULL UNIQUE,
@@ -69,7 +71,9 @@ CREATE TABLE news_categories (
 
 ALTER TABLE news_categories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "news_categories_select_public" ON news_categories;
 CREATE POLICY "news_categories_select_public" ON news_categories FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "news_categories_admin_all" ON news_categories;
 CREATE POLICY "news_categories_admin_all" ON news_categories
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
@@ -88,12 +92,13 @@ INSERT INTO news_categories (name, slug, description, display_order) VALUES
   ('Storage & Logistics', 'storage-logistics', 'Storage and transportation news', 11),
   ('Agricultural Finance', 'agricultural-finance', 'Funding, grants, and financial services', 12),
   ('Opportunities', 'opportunities', 'Programs, grants, and opportunities', 13),
-  ('Research & Innovation', 'research-innovation', 'Research findings and innovations', 14);
+  ('Research & Innovation', 'research-innovation', 'Research findings and innovations', 14)
+ON CONFLICT (slug) DO NOTHING;
 
 -- 4. NEWS ARTICLES
 -- ----------------------------------------------------------------
 
-CREATE TABLE news_articles (
+CREATE TABLE IF NOT EXISTS news_articles (
   id              BIGSERIAL PRIMARY KEY,
   title           TEXT NOT NULL,
   slug            TEXT NOT NULL UNIQUE,
@@ -121,28 +126,30 @@ CREATE TABLE news_articles (
 
 ALTER TABLE news_articles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "news_articles_select_published" ON news_articles;
 CREATE POLICY "news_articles_select_published" ON news_articles
   FOR SELECT USING (status = 'published');
+DROP POLICY IF EXISTS "news_articles_admin_all" ON news_articles;
 CREATE POLICY "news_articles_admin_all" ON news_articles
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX idx_news_articles_slug ON news_articles(slug);
-CREATE INDEX idx_news_articles_status ON news_articles(status);
-CREATE INDEX idx_news_articles_category ON news_articles(category_id);
-CREATE INDEX idx_news_articles_published ON news_articles(published_at DESC);
-CREATE INDEX idx_news_articles_source ON news_articles(source_id);
-CREATE INDEX idx_news_articles_featured ON news_articles(is_featured) WHERE is_featured = true;
-CREATE INDEX idx_news_articles_tags ON news_articles USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_news_articles_slug ON news_articles(slug);
+CREATE INDEX IF NOT EXISTS idx_news_articles_status ON news_articles(status);
+CREATE INDEX IF NOT EXISTS idx_news_articles_category ON news_articles(category_id);
+CREATE INDEX IF NOT EXISTS idx_news_articles_published ON news_articles(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_articles_source ON news_articles(source_id);
+CREATE INDEX IF NOT EXISTS idx_news_articles_featured ON news_articles(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_news_articles_tags ON news_articles USING GIN (tags);
 
 -- Full-text search index
-CREATE INDEX idx_news_articles_fts ON news_articles USING GIN (
+CREATE INDEX IF NOT EXISTS idx_news_articles_fts ON news_articles USING GIN (
   to_tsvector('english', coalesce(title, '') || ' ' || coalesce(summary, '') || ' ' || coalesce(content, ''))
 );
 
 -- 5. COMMODITIES
 -- ----------------------------------------------------------------
 
-CREATE TABLE commodities (
+CREATE TABLE IF NOT EXISTS commodities (
   id            BIGSERIAL PRIMARY KEY,
   name          TEXT NOT NULL UNIQUE,
   slug          TEXT NOT NULL UNIQUE,
@@ -156,7 +163,9 @@ CREATE TABLE commodities (
 
 ALTER TABLE commodities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "commodities_select_public" ON commodities;
 CREATE POLICY "commodities_select_public" ON commodities FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "commodities_admin_all" ON commodities;
 CREATE POLICY "commodities_admin_all" ON commodities
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
@@ -179,12 +188,13 @@ INSERT INTO commodities (name, slug, category, unit, display_order) VALUES
   ('Fish', 'fish', 'fisheries', 'kg', 15),
   ('Goat', 'goat', 'livestock', 'head', 16),
   ('Sheep', 'sheep', 'livestock', 'head', 17),
-  ('Cattle', 'cattle', 'livestock', 'head', 18);
+  ('Cattle', 'cattle', 'livestock', 'head', 18)
+ON CONFLICT (slug) DO NOTHING;
 
 -- 6. MARKET PRICES
 -- ----------------------------------------------------------------
 
-CREATE TABLE market_prices (
+CREATE TABLE IF NOT EXISTS market_prices (
   id              BIGSERIAL PRIMARY KEY,
   commodity_id    BIGINT NOT NULL REFERENCES commodities(id) ON DELETE CASCADE,
   market_name     TEXT NOT NULL,
@@ -204,19 +214,21 @@ CREATE TABLE market_prices (
 
 ALTER TABLE market_prices ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "market_prices_select_public" ON market_prices;
 CREATE POLICY "market_prices_select_public" ON market_prices FOR SELECT USING (true);
+DROP POLICY IF EXISTS "market_prices_admin_all" ON market_prices;
 CREATE POLICY "market_prices_admin_all" ON market_prices
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX idx_market_prices_commodity ON market_prices(commodity_id);
-CREATE INDEX idx_market_prices_market ON market_prices(market_name);
-CREATE INDEX idx_market_prices_date ON market_prices(data_date DESC);
-CREATE INDEX idx_market_prices_commodity_date ON market_prices(commodity_id, data_date DESC);
+CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON market_prices(commodity_id);
+CREATE INDEX IF NOT EXISTS idx_market_prices_market ON market_prices(market_name);
+CREATE INDEX IF NOT EXISTS idx_market_prices_date ON market_prices(data_date DESC);
+CREATE INDEX IF NOT EXISTS idx_market_prices_commodity_date ON market_prices(commodity_id, data_date DESC);
 
 -- 7. MARKET PRICE HISTORY (for trends/charts)
 -- ----------------------------------------------------------------
 
-CREATE TABLE market_price_history (
+CREATE TABLE IF NOT EXISTS market_price_history (
   id              BIGSERIAL PRIMARY KEY,
   commodity_id    BIGINT NOT NULL REFERENCES commodities(id) ON DELETE CASCADE,
   market_name     TEXT NOT NULL,
@@ -233,17 +245,19 @@ CREATE TABLE market_price_history (
 
 ALTER TABLE market_price_history ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "market_price_history_select_public" ON market_price_history;
 CREATE POLICY "market_price_history_select_public" ON market_price_history FOR SELECT USING (true);
+DROP POLICY IF EXISTS "market_price_history_admin_all" ON market_price_history;
 CREATE POLICY "market_price_history_admin_all" ON market_price_history
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX idx_market_price_history_commodity ON market_price_history(commodity_id);
-CREATE INDEX idx_market_price_history_period ON market_price_history(period_start DESC, period_end DESC);
+CREATE INDEX IF NOT EXISTS idx_market_price_history_commodity ON market_price_history(commodity_id);
+CREATE INDEX IF NOT EXISTS idx_market_price_history_period ON market_price_history(period_start DESC, period_end DESC);
 
 -- 8. MARKET ALERTS (price alerts)
 -- ----------------------------------------------------------------
 
-CREATE TABLE market_alerts (
+CREATE TABLE IF NOT EXISTS market_alerts (
   id              BIGSERIAL PRIMARY KEY,
   user_id         UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   commodity_id    BIGINT NOT NULL REFERENCES commodities(id) ON DELETE CASCADE,
@@ -257,22 +271,26 @@ CREATE TABLE market_alerts (
 
 ALTER TABLE market_alerts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "market_alerts_select_own" ON market_alerts;
 CREATE POLICY "market_alerts_select_own" ON market_alerts
   FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "market_alerts_insert_own" ON market_alerts;
 CREATE POLICY "market_alerts_insert_own" ON market_alerts
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "market_alerts_update_own" ON market_alerts;
 CREATE POLICY "market_alerts_update_own" ON market_alerts
   FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "market_alerts_delete_own" ON market_alerts;
 CREATE POLICY "market_alerts_delete_own" ON market_alerts
   FOR DELETE USING (auth.uid() = user_id);
 
-CREATE INDEX idx_market_alerts_user ON market_alerts(user_id);
-CREATE INDEX idx_market_alerts_active ON market_alerts(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_market_alerts_user ON market_alerts(user_id);
+CREATE INDEX IF NOT EXISTS idx_market_alerts_active ON market_alerts(is_active) WHERE is_active = true;
 
 -- 9. AGRICULTURAL OPPORTUNITIES
 -- ----------------------------------------------------------------
 
-CREATE TABLE opportunities (
+CREATE TABLE IF NOT EXISTS opportunities (
   id              BIGSERIAL PRIMARY KEY,
   title           TEXT NOT NULL,
   slug            TEXT NOT NULL UNIQUE,
@@ -295,22 +313,24 @@ CREATE TABLE opportunities (
 
 ALTER TABLE opportunities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "opportunities_select_published" ON opportunities;
 CREATE POLICY "opportunities_select_published" ON opportunities
   FOR SELECT USING (status IN ('open', 'upcoming'));
+DROP POLICY IF EXISTS "opportunities_admin_all" ON opportunities;
 CREATE POLICY "opportunities_admin_all" ON opportunities
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX idx_opportunities_slug ON opportunities(slug);
-CREATE INDEX idx_opportunities_status ON opportunities(status);
-CREATE INDEX idx_opportunities_deadline ON opportunities(deadline);
-CREATE INDEX idx_opportunities_type ON opportunities(opportunity_type);
-CREATE INDEX idx_opportunities_featured ON opportunities(is_featured) WHERE is_featured = true;
-CREATE INDEX idx_opportunities_tags ON opportunities USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_opportunities_slug ON opportunities(slug);
+CREATE INDEX IF NOT EXISTS idx_opportunities_status ON opportunities(status);
+CREATE INDEX IF NOT EXISTS idx_opportunities_deadline ON opportunities(deadline);
+CREATE INDEX IF NOT EXISTS idx_opportunities_type ON opportunities(opportunity_type);
+CREATE INDEX IF NOT EXISTS idx_opportunities_featured ON opportunities(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_opportunities_tags ON opportunities USING GIN (tags);
 
 -- 10. NEWS BOOKMARKS (reuse learning bookmark pattern)
 -- ----------------------------------------------------------------
 
-CREATE TABLE news_bookmarks (
+CREATE TABLE IF NOT EXISTS news_bookmarks (
   id          BIGSERIAL PRIMARY KEY,
   user_id     UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   article_id  BIGINT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
@@ -320,14 +340,17 @@ CREATE TABLE news_bookmarks (
 
 ALTER TABLE news_bookmarks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "news_bookmarks_select_own" ON news_bookmarks;
 CREATE POLICY "news_bookmarks_select_own" ON news_bookmarks
   FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "news_bookmarks_insert_own" ON news_bookmarks;
 CREATE POLICY "news_bookmarks_insert_own" ON news_bookmarks
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "news_bookmarks_delete_own" ON news_bookmarks;
 CREATE POLICY "news_bookmarks_delete_own" ON news_bookmarks
   FOR DELETE USING (auth.uid() = user_id);
 
-CREATE INDEX idx_news_bookmarks_user ON news_bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_news_bookmarks_user ON news_bookmarks(user_id);
 
 -- 11. UPDATED-AT TRIGGERS
 -- ----------------------------------------------------------------
@@ -340,6 +363,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS on_news_source_updated ON news_sources;
 CREATE TRIGGER on_news_source_updated
   BEFORE UPDATE ON news_sources
   FOR EACH ROW EXECUTE FUNCTION update_news_source_timestamp();
@@ -352,6 +376,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS on_news_article_updated ON news_articles;
 CREATE TRIGGER on_news_article_updated
   BEFORE UPDATE ON news_articles
   FOR EACH ROW EXECUTE FUNCTION update_news_article_timestamp();
@@ -364,6 +389,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS on_opportunity_updated ON opportunities;
 CREATE TRIGGER on_opportunity_updated
   BEFORE UPDATE ON opportunities
   FOR EACH ROW EXECUTE FUNCTION update_opportunity_timestamp();
