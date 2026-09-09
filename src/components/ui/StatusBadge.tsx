@@ -1,9 +1,9 @@
-import type { VerificationTier, ShipmentStatus } from '@/lib/types';
-import { SHIPMENT_STATUS_CONFIG } from '@/lib/types';
+import type { VerificationTier, ShipmentStatus, StorageBookingStatus, StorageFacilityStatus, LearningResourceStatus, NewsArticleStatus, OpportunityStatus } from '@/lib/types';
+import { SHIPMENT_STATUS_CONFIG, STORAGE_BOOKING_STATUS_CONFIG, LEARNING_STATUS_CONFIG, NEWS_STATUS_CONFIG, OPPORTUNITY_STATUS_CONFIG } from '@/lib/types';
 
 interface StatusBadgeProps {
-  type: 'approval' | 'verification' | 'tier' | 'escrow' | 'shipment';
-  value: boolean | string | VerificationTier | ShipmentStatus;
+  type: 'approval' | 'verification' | 'tier' | 'escrow' | 'shipment' | 'storage_booking' | 'storage_facility' | 'learning_resource' | 'news_article' | 'opportunity';
+  value: boolean | string | VerificationTier | ShipmentStatus | StorageBookingStatus | StorageFacilityStatus | LearningResourceStatus | NewsArticleStatus | OpportunityStatus;
   pending?: boolean;
 }
 
@@ -124,6 +124,71 @@ export default function StatusBadge({ type, value, pending }: StatusBadgeProps) 
   if (type === 'shipment') {
     const status = (typeof value === 'string' ? value : 'pending') as ShipmentStatus;
     const cfg = SHIPMENT_STATUS_CONFIG[status] ?? SHIPMENT_STATUS_CONFIG.pending;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── Storage booking status badge ────────────────────────────────────────
+  if (type === 'storage_booking') {
+    const status = (typeof value === 'string' ? value : 'pending') as StorageBookingStatus;
+    const cfg = STORAGE_BOOKING_STATUS_CONFIG[status] ?? STORAGE_BOOKING_STATUS_CONFIG.pending;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── Storage facility status badge ───────────────────────────────────────
+  if (type === 'storage_facility') {
+    const config: Record<string, { label: string; classes: string }> = {
+      active:      { label: 'Active',      classes: 'bg-emerald-100 text-emerald-700' },
+      inactive:    { label: 'Inactive',    classes: 'bg-gray-100 text-gray-600' },
+      maintenance: { label: 'Maintenance', classes: 'bg-amber-100 text-amber-700' },
+    };
+    const status = typeof value === 'string' ? value : 'active';
+    const cfg = config[status] ?? config.active;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.classes}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── Learning resource status badge ──────────────────────────────────────
+  if (type === 'learning_resource') {
+    const status = (typeof value === 'string' ? value : 'draft') as LearningResourceStatus;
+    const cfg = LEARNING_STATUS_CONFIG[status] ?? LEARNING_STATUS_CONFIG.draft;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── News article status badge ──────────────────────────────────────────
+  if (type === 'news_article') {
+    const status = (typeof value === 'string' ? value : 'pending') as NewsArticleStatus;
+    const cfg = NEWS_STATUS_CONFIG[status] ?? NEWS_STATUS_CONFIG.pending;
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    );
+  }
+
+  // ─── Opportunity status badge ──────────────────────────────────────────
+  if (type === 'opportunity') {
+    const status = (typeof value === 'string' ? value : 'open') as OpportunityStatus;
+    const cfg = OPPORTUNITY_STATUS_CONFIG[status] ?? OPPORTUNITY_STATUS_CONFIG.open;
 
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>

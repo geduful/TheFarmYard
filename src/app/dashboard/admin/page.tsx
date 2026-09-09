@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, 
-Report, Shipment, ReRegistrationRequest } from '@/lib/types';
+  Report, Shipment, ReRegistrationRequest, StorageFacility, StorageBooking,
+  LearningResource, LearningCategory } from '@/lib/types';
 import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -39,6 +40,655 @@ function DocPreview({ url, index }: { url: string; index: number }) {
   );
 }
 
+function LearningTab({
+  resources,
+  categories,
+  onRefresh,
+  showToast,
+}: {
+  resources: LearningResource[];
+  categories: LearningCategory[];
+  onRefresh: () => Promise<void>;
+  showToast: (msg: string, type: 'success' | 'error') => void;
+}) {
+  const supabase = createClient();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published' | 'archived'>('all');
+  const [editing, setEditing] = useState<LearningResource | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // AI generation state
+  const [showAiGenerate, setShowAiGenerate] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  // Form state
+  const [formTitle, setFormTitle] = useState('');
+  const [formSummary, setFormSummary] = useState('');
+  const [formContent, setFormContent] = useState('');
+  const [formCategoryId, setFormCategoryId] = useState<number | null>(null);
+  const [formContentType, setFormContentType] = useState<'article' | 'guide' | 'tutorial' | 'video' | 'checklist' | 'faq'>('article');
+  const [formDifficulty, setFormDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
+  const [formTags, setFormTags] = useState('');
+  const [formStatus, setFormStatus] = useState<'draft' | 'published' | 'archived'>('draft');
+  const [formFeatured, setFormFeatured] = useState(false);
+  const [formFeaturedImage, setFormFeaturedImage] = useState('');
+  const [formAuthorName, setFormAuthorName] = useState('');
+
+  function resetForm() {
+    setFormTitle('');
+    setFormSummary('');
+    setFormContent('');
+    setFormCategoryId(null);
+    setFormContentType('article');
+    setFormDifficulty('beginner');
+    setFormTags('');
+    setFormStatus('draft');
+    setFormFeatured(false);
+    setFormFeaturedImage('');
+    setFormAuthorName('');
+    setEditing(null);
+  }
+
+  function openEdit(r: LearningResource) {
+    setEditing(r);
+    setFormTitle(r.title);
+    setFormSummary(r.summary || '');
+    setFormContent(r.content);
+    setFormCategoryId(r.category_id);
+    setFormContentType(r.content_type);
+    setFormDifficulty(r.difficulty);
+    setFormTags(r.tags.join(', '));
+    setFormStatus(r.status);
+    setFormFeatured(r.is_featured);
+    setFormFeaturedImage(r.featured_image || '');
+    setFormAuthorName(r.author_name || '');
+    setShowCreate(true);
+  }
+
+  async function handleAiGenerate() {
+    if (!aiTopic.trim()) {
+      showToast('Please enter a topic.', 'error');
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const response = await fetch('/api/learning/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: aiTopic, contentType: formContentType }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        showToast(data.error || 'AI generation failed.', 'error');
+        setAiGenerating(false);
+        return;
+      }
+      // Populate form with AI-generated content
+      setFormTitle(data.title || '');
+      setFormSummary(data.summary || '');
+      setFormContent(data.content || '');
+      setFormTags(Array.isArray(data.tags) ? data.tags.join(', ') : '');
+      setFormDifficulty(data.difficulty || 'beginner');
+      setFormFeaturedImage(data.featuredImage || '');
+      setFormAuthorName(data.authorName || '');
+      // Match category
+      if (data.categoryId) {
+        setFormCategoryId(data.categoryId);
+      } else if (data.category) {
+        const matchedCat = categories.find((c) => c.name.toLowerCase() === data.category.toLowerCase());
+        if (matchedCat) setFormCategoryId(matchedCat.id);
+      }
+      setShowAiGenerate(false);
+      setShowCreate(true);
+      showToast('AI content generated. Review and publish.', 'success');
+    } catch {
+      showToast('AI generation failed. Please try again.', 'error');
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!formTitle.trim() || !formContent.trim()) {
+      showToast('Title and content are required.', 'error');
+      return;
+    }
+    setSaving(true);
+    const slug = formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const tags = formTags.split(',').map((t) => t.trim()).filter(Boolean);
+    const payload = {
+      title: formTitle.trim(),
+      slug,
+      summary: formSummary.trim() || null,
+      content: formContent.trim(),
+      category_id: formCategoryId,
+      content_type: formContentType,
+      difficulty: formDifficulty,
+      tags,
+      status: formStatus,
+      is_featured: formFeatured,
+      featured_image: formFeaturedImage.trim() || null,
+      author_name: formAuthorName.trim() || null,
+      reading_time_min: Math.max(1, Math.ceil(formContent.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length / 200)),
+      published_at: formStatus === 'published' ? new Date().toISOString() : null,
+    };
+
+    if (editing) {
+      const { error } = await supabase.from('learning_resources').update(payload).eq('id', editing.id);
+      if (error) { showToast(error.message, 'error'); setSaving(false); return; }
+      showToast('Resource updated.', 'success');
+    } else {
+      const { error } = await supabase.from('learning_resources').insert(payload);
+      if (error) { showToast(error.message, 'error'); setSaving(false); return; }
+      showToast('Resource created.', 'success');
+    }
+    resetForm();
+    setShowCreate(false);
+    await onRefresh();
+    setSaving(false);
+  }
+
+  async function handleDeleteResource(id: number) {
+    const { error } = await supabase.from('learning_resources').delete().eq('id', id);
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast('Resource deleted.', 'success');
+    await onRefresh();
+  }
+
+  async function handleTogglePublish(r: LearningResource) {
+    const newStatus = r.status === 'published' ? 'draft' : 'published';
+    const update: Record<string, unknown> = { status: newStatus };
+    if (newStatus === 'published') update.published_at = new Date().toISOString();
+    const { error } = await supabase.from('learning_resources').update(update).eq('id', r.id);
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast(`Resource ${newStatus === 'published' ? 'published' : 'unpublished'}.`, 'success');
+    await onRefresh();
+  }
+
+  const filtered = resources.filter((r) => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!r.title.toLowerCase().includes(q) && !r.summary?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const statusCounts = {
+    draft: resources.filter((r) => r.status === 'draft').length,
+    published: resources.filter((r) => r.status === 'published').length,
+    archived: resources.filter((r) => r.status === 'archived').length,
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">Learning Resources</h3>
+          <p className="text-sm text-gray-500">{resources.length} total resources</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAiGenerate(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold rounded-xl hover:from-purple-700 hover:to-indigo-700 transition shadow-sm flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+            </svg>
+            Generate with AI
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowCreate(true); }}
+            className="px-4 py-2.5 bg-gradient-to-r from-farm-green to-emerald-green text-white text-sm font-semibold rounded-xl hover:from-farm-green/90 hover:to-emerald-green/90 transition shadow-sm flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}><path d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            Create Manually
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search resources..."
+            className="w-full pl-10 pr-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-farm-green/30"
+          />
+        </div>
+        <div className="flex gap-1.5 p-1 bg-white rounded-xl border border-gray-100">
+          {(['all', 'draft', 'published', 'archived'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all capitalize ${
+                statusFilter === s ? 'bg-farm-green text-white' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {s === 'all' ? `All (${resources.length})` : `${s} (${statusCounts[s]})`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Resources list */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+          <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+          <p className="text-gray-500 font-medium">No resources found</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((r) => (
+            <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h4 className="font-semibold text-gray-900">{r.title}</h4>
+                    <StatusBadge type="learning_resource" value={r.status} />
+                    {r.is_featured && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">Featured</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <span className="capitalize">{r.content_type}</span>
+                    <span className="capitalize">{r.difficulty}</span>
+                    {r.category && <span>{r.category.name}</span>}
+                    <span>{r.reading_time_min} min read</span>
+                    <span>{r.view_count} views</span>
+                    {r.published_at && <span>Published {new Date(r.published_at).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleTogglePublish(r)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                      r.status === 'published'
+                        ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {r.status === 'published' ? 'Unpublish' : 'Publish'}
+                  </button>
+                  <button
+                    onClick={() => openEdit(r)}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteResource(r.id)}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* AI Generate Modal */}
+      {showAiGenerate && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40 animate-fade-in" onClick={() => { setShowAiGenerate(false); setAiTopic(''); }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-md animate-scale-in">
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Generate with AI</h3>
+                    <p className="text-sm text-gray-500">AI will create content for you to review</p>
+                  </div>
+                </div>
+                <button onClick={() => { setShowAiGenerate(false); setAiTopic(''); }}
+                  className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">What should the article be about?</label>
+                  <input type="text" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAiGenerate(); }}
+                    placeholder="e.g. How to store maize after harvest"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Content type</label>
+                  <select value={formContentType} onChange={(e) => setFormContentType(e.target.value as typeof formContentType)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300">
+                    <option value="article">Article</option>
+                    <option value="guide">Guide</option>
+                    <option value="tutorial">Tutorial</option>
+                    <option value="checklist">Checklist</option>
+                    <option value="faq">FAQ</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-400">AI will generate a draft. You can review and edit before publishing.</p>
+              </div>
+              <div className="flex gap-3 p-6 border-t border-gray-100">
+                <button onClick={() => { setShowAiGenerate(false); setAiTopic(''); }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-200 transition">
+                  Cancel
+                </button>
+                <button onClick={handleAiGenerate} disabled={aiGenerating || !aiTopic.trim()}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold rounded-xl hover:from-purple-700 hover:to-indigo-700 transition shadow-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                  {aiGenerating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      </svg>
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Create/Edit Modal */}
+      {showCreate && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40 animate-fade-in" onClick={() => { setShowCreate(false); resetForm(); }} />
+          <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[5vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-2xl animate-scale-in">
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900">{editing ? 'Edit Resource' : 'Create Resource'}</h3>
+                <button onClick={() => { setShowCreate(false); resetForm(); }}
+                  className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <input type="text" value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/30" placeholder="Resource title" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Summary</label>
+                  <textarea value={formSummary} onChange={(e) => setFormSummary(e.target.value)} rows={2}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/30 resize-none" placeholder="Brief summary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Content * (HTML supported)</label>
+                  <textarea value={formContent} onChange={(e) => setFormContent(e.target.value)} rows={10}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-farm-green/30 resize-y" placeholder="Write your content here. HTML tags are supported for formatting." />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select value={formCategoryId ?? ''} onChange={(e) => setFormCategoryId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-farm-green/30">
+                      <option value="">No category</option>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Content Type</label>
+                    <select value={formContentType} onChange={(e) => setFormContentType(e.target.value as typeof formContentType)}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-farm-green/30">
+                      <option value="article">Article</option>
+                      <option value="guide">Guide</option>
+                      <option value="tutorial">Tutorial</option>
+                      <option value="video">Video</option>
+                      <option value="checklist">Checklist</option>
+                      <option value="faq">FAQ</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
+                    <select value={formDifficulty} onChange={(e) => setFormDifficulty(e.target.value as typeof formDifficulty)}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-farm-green/30">
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select value={formStatus} onChange={(e) => setFormStatus(e.target.value as typeof formStatus)}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-farm-green/30">
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
+                  <input type="text" value={formTags} onChange={(e) => setFormTags(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/30" placeholder="maize, storage, post-harvest" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Featured Image URL</label>
+                  <input type="text" value={formFeaturedImage} onChange={(e) => setFormFeaturedImage(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/30" placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Author Name</label>
+                  <input type="text" value={formAuthorName} onChange={(e) => setFormAuthorName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/30" placeholder="Author display name" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formFeatured} onChange={(e) => setFormFeatured(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-farm-green focus:ring-farm-green/30" />
+                  <span className="text-sm font-medium text-gray-700">Featured resource</span>
+                </label>
+              </div>
+              <div className="flex gap-3 p-6 border-t border-gray-100">
+                <button onClick={() => { setShowCreate(false); resetForm(); }}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-200 transition">
+                  Cancel
+                </button>
+                <button onClick={handleSave} disabled={saving}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-farm-green to-emerald-green text-white text-sm font-semibold rounded-xl hover:from-farm-green/90 hover:to-emerald-green/90 transition shadow-sm disabled:opacity-50">
+                  {saving ? 'Saving...' : editing ? 'Update Resource' : 'Create Resource'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function NewsTab({ showToast }: { showToast: (msg: string, type: 'success' | 'error') => void }) {
+  const supabase = createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [articles, setArticles] = useState<any[]>([]);
+  const [sources, setSources] = useState<{ id: number; name: string; source_type: string; status: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const [articlesRes, sourcesRes] = await Promise.all([
+        supabase.from('news_articles').select('id, title, slug, status, source_name, published_at, is_featured, category:news_categories(name)').order('created_at', { ascending: false }),
+        supabase.from('news_sources').select('id, name, source_type, status').order('name'),
+      ]);
+      setArticles(articlesRes.data || []);
+      setSources(sourcesRes.data || []);
+      setLoading(false);
+    })();
+  }, [supabase]);
+
+  const handleApprove = async (id: number) => {
+    const { error } = await supabase.from('news_articles').update({ status: 'approved', published_at: new Date().toISOString() }).eq('id', id);
+    if (!error) {
+      setArticles(prev => prev.map(a => a.id === id ? { ...a, status: 'approved', published_at: new Date().toISOString() } : a));
+      showToast('Article approved', 'success');
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    const { error } = await supabase.from('news_articles').update({ status: 'rejected' }).eq('id', id);
+    if (!error) {
+      setArticles(prev => prev.map(a => a.id === id ? { ...a, status: 'rejected' } : a));
+      showToast('Article rejected', 'success');
+    }
+  };
+
+  const handleToggleFeatured = async (id: number, current: boolean) => {
+    const { error } = await supabase.from('news_articles').update({ is_featured: !current }).eq('id', id);
+    if (!error) {
+      setArticles(prev => prev.map(a => a.id === id ? { ...a, is_featured: !current } : a));
+    }
+  };
+
+  const handleDeleteSource = async (id: number) => {
+    const { error } = await supabase.from('news_sources').delete().eq('id', id);
+    if (!error) {
+      setSources(prev => prev.filter(s => s.id !== id));
+      showToast('Source deleted', 'success');
+    }
+  };
+
+  const filtered = articles.filter(a => {
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (search && !a.title.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const statusColor = (s: string) => {
+    const colors: Record<string, string> = { pending: 'bg-amber-100 text-amber-700', approved: 'bg-blue-100 text-blue-700', published: 'bg-emerald-100 text-emerald-700', rejected: 'bg-red-100 text-red-700', archived: 'bg-gray-100 text-gray-600' };
+    return colors[s] || 'bg-gray-100 text-gray-600';
+  };
+
+  const sourceTypeColor = (t: string) => {
+    const colors: Record<string, string> = { government: 'bg-blue-100 text-blue-700', research: 'bg-purple-100 text-purple-700', international: 'bg-indigo-100 text-indigo-700', publication: 'bg-amber-100 text-amber-700', market_service: 'bg-emerald-100 text-emerald-700', weather: 'bg-cyan-100 text-cyan-700', news_org: 'bg-rose-100 text-rose-700', ngo: 'bg-teal-100 text-teal-700' };
+    return colors[t] || 'bg-gray-100 text-gray-700';
+  };
+
+  if (loading) return <TableSkeleton rows={5} />;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Articles Management */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-bold text-gray-900">News Articles ({filtered.length})</h3>
+            <div className="flex gap-2">
+              <input type="text" placeholder="Search articles..." value={search} onChange={(e) => setSearch(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-green focus:border-transparent" />
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg">
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="published">Published</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left">
+                <th className="px-5 py-3 font-semibold text-gray-600">Title</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Category</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Source</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Status</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((article) => (
+                <tr key={article.id} className="hover:bg-gray-50">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">{article.title}</span>
+                      {article.is_featured && <span className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">Featured</span>}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">{(article.category as { name: string } | null)?.name || '—'}</td>
+                  <td className="px-5 py-3 text-gray-600">{article.source_name || '—'}</td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(article.status)}`}>{article.status}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex gap-1">
+                      {article.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleApprove(article.id)} className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100">Approve</button>
+                          <button onClick={() => handleReject(article.id)} className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">Reject</button>
+                        </>
+                      )}
+                      <button onClick={() => handleToggleFeatured(article.id, article.is_featured)} className="px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100">
+                        {article.is_featured ? 'Unfeature' : 'Feature'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Sources Management */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">News Sources ({sources.length})</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left">
+                <th className="px-5 py-3 font-semibold text-gray-600">Name</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Type</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Status</th>
+                <th className="px-5 py-3 font-semibold text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {sources.map((source) => (
+                <tr key={source.id} className="hover:bg-gray-50">
+                  <td className="px-5 py-3 font-medium text-gray-900">{source.name}</td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sourceTypeColor(source.source_type)}`}>{source.source_type.replace(/_/g, ' ')}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${source.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{source.status}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <button onClick={() => handleDeleteSource(source.id)} className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -49,10 +699,14 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [reRegRequests, setReRegRequests] = useState<ReRegistrationRequest[]>([]);
+  const [facilities, setFacilities] = useState<StorageFacility[]>([]);
+  const [storageBookings, setStorageBookings] = useState<StorageBooking[]>([]);
+  const [learningResources, setLearningResources] = useState<LearningResource[]>([]);
+  const [learningCategories, setLearningCategories] = useState<LearningCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations' | 'storage' | 'learning' | 'news'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingDocs, setViewingDocs] = useState<VerificationRequest | null>(null);
@@ -60,35 +714,48 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const supabase = createClient();
-    async function load() {
+    let cancelled = false;
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      if (cancelled) return;
       if (!p) { setNoProfile(true); setLoading(false); return; }
       if (p.role !== 'admin') { router.push('/marketplace'); return; }
-      const { data: l, error: listingsError } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false });
-      setListings(l || []);
-      const { data: u } = await supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false });
-      setUsers(u || []);
-      const { data: vr } = await supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false });
-      setVerificationRequests(vr || []);
-      const { data: pvr } = await supabase.from('premium_verification_requests').select('*, profile:profiles!premium_verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role, verification_tier)').order('created_at', { ascending: false });
-      setPremiumRequests(pvr || []);
-      const { data: rpts } = await supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false });
-      setReports(rpts || []);
 
-      // Load shipments
-      const { data: s } = await supabase.from('shipments').select('*').order('created_at', { ascending: false });
-      setShipments(s || []);
+      // Parallelize all independent queries
+      const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes] = await Promise.all([
+        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false }),
+        supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false }),
+        supabase.from('premium_verification_requests').select('*, profile:profiles!premium_verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role, verification_tier)').order('created_at', { ascending: false }),
+        supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false }),
+        supabase.from('shipments').select('*').order('created_at', { ascending: false }),
+        supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false }),
+        supabase.from('storage_facilities').select('*').order('created_at', { ascending: false }),
+        supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit), farmer:profiles!storage_bookings_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }),
+        supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false }),
+        supabase.from('learning_categories').select('*').order('display_order'),
+      ]);
 
-      // Load re-registration requests
-      const { data: rr } = await supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false });
-      setReRegRequests(rr || []);
+      if (cancelled) return;
+      setListings(listingsRes.data || []);
+      setUsers(usersRes.data || []);
+      setVerificationRequests(verifRes.data || []);
+      setPremiumRequests(premiumRes.data || []);
+      setReports(reportsRes.data || []);
+      setShipments(shipmentsRes.data || []);
+      setReRegRequests(reRegRes.data || []);
+      setFacilities(facilitiesRes.data || []);
+      setStorageBookings(bookingsRes.data || []);
+      setLearningResources(learningRes.data || []);
+      setLearningCategories(categoriesRes.data || []);
 
-      if (listingsError) setLoadError(`Listings failed to load: ${listingsError.message}`);
+      if (listingsRes.error) setLoadError(`Listings failed to load: ${listingsRes.error.message}`);
       setLoading(false);
-    }
-    load();
+    })();
+    return () => { cancelled = true; };
   }, [router]);
 
   async function handleApprove(listingId: number) {
@@ -281,7 +948,7 @@ export default function AdminDashboard() {
       )}
       <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
-          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations'] as const).map((tab) => {
+          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations', 'storage', 'learning', 'news'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
               users: unverifiedUsers.length + blockedUsers.length,
@@ -290,17 +957,20 @@ export default function AdminDashboard() {
               reports: openReports.length,
               logistics: shipments.filter((s) => !['delivery_confirmed', 'cancelled', 'failed'].includes(s.status)).length,
               reregistrations: pendingReReg.length,
+              storage: storageBookings.filter((b) => b.status === 'pending').length,
+              learning: learningResources.filter((r) => r.status === 'draft').length,
+              news: 0,
             };
-            return (
+              return (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
                   activeTab === tab
                     ? tab === 'premium'
-                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md'
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-purple-500/20'
                       : tab === 'reports'
-                      ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md'
-                      : 'bg-gradient-to-r from-farm-green to-emerald-green text-white shadow-md'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md shadow-red-500/20'
+                      : 'bg-gradient-to-r from-farm-green to-emerald-green text-white shadow-md shadow-farm-green/20'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
                 }`}>
                 <span className="flex items-center gap-2">
                   {tab === 'listings' ? (
@@ -315,13 +985,19 @@ export default function AdminDashboard() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                   ) : tab === 'reregistrations' ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" /></svg>
+                  ) : tab === 'storage' ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21" /></svg>
+                  ) : tab === 'learning' ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" /></svg>
+                  ) : tab === 'news' ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5" /></svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                   )}
-                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : 'Reports'}
+                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : tab === 'storage' ? 'Storage' : tab === 'learning' ? 'Learning' : tab === 'news' ? 'News' : 'Reports'}
                   {counts[tab] > 0 && (
                     <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
-                      activeTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
+                      activeTab === tab ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
                     }`}>
                       {counts[tab]}
                     </span>
@@ -747,11 +1423,11 @@ export default function AdminDashboard() {
                 other: 'bg-gray-100 text-gray-600 border-gray-200',
               };
               const categoryLabels: Record<string, string> = {
-                fraud: '🚨 Fraud / Scam',
-                delivery_issue: '📦 Delivery Issue',
-                listing_issue: '📋 Listing Issue',
-                account_issue: '👤 Account Issue',
-                other: '💬 Other',
+                fraud: 'Fraud / Scam',
+                delivery_issue: 'Delivery Issue',
+                listing_issue: 'Listing Issue',
+                account_issue: 'Account Issue',
+                other: 'Other',
               };
               const statusColors: Record<string, string> = {
                 open: 'bg-red-50 text-red-700 border-red-200',
@@ -989,6 +1665,149 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Storage Tab */}
+      {activeTab === 'storage' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Facilities Section */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Storage Facilities</h3>
+            {facilities.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                <p className="text-gray-500 font-medium">No storage facilities registered</p>
+                <p className="text-gray-400 text-sm mt-1">Facilities will appear here once added to the platform.</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {facilities.map((facility) => {
+                  const occupancyPct = facility.total_capacity > 0
+                    ? Math.round(((facility.total_capacity - facility.available_capacity) / facility.total_capacity) * 100)
+                    : 0;
+                  const activeBookings = storageBookings.filter((b) => b.facility_id === facility.id && !['checked_out', 'cancelled', 'expired'].includes(b.status)).length;
+
+                  return (
+                    <div key={facility.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold text-gray-900 text-sm">{facility.name}</h4>
+                        <StatusBadge type="storage_facility" value={facility.status} />
+                      </div>
+                      <p className="text-xs text-gray-500 mb-2">{facility.location}</p>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-gray-500">Capacity</span>
+                        <span className="font-medium text-gray-700">{facility.available_capacity.toLocaleString()} / {facility.total_capacity.toLocaleString()} {facility.capacity_unit}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                        <div className={`h-full rounded-full ${occupancyPct > 90 ? 'bg-red-400' : occupancyPct > 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                          style={{ width: `${occupancyPct}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">{activeBookings} active bookings</span>
+                        <span className="font-semibold text-farm-green">{formatCurrency(facility.price_per_unit)}/{facility.capacity_unit}/day</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Bookings Section */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Storage Bookings</h3>
+            {storageBookings.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                <p className="text-gray-500 font-medium">No bookings yet</p>
+                <p className="text-gray-400 text-sm mt-1">Farmer storage bookings will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {storageBookings.map((booking) => (
+                  <div key={booking.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h4 className="font-semibold text-gray-900">{booking.produce_name}</h4>
+                          <StatusBadge type="storage_booking" value={booking.status} />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <span>{booking.farmer?.full_name}</span>
+                          <span>{booking.facility?.name} — {booking.facility?.location}</span>
+                          <span>{booking.quantity.toLocaleString()} {booking.quantity_unit}</span>
+                          <span>{booking.storage_start} to {booking.storage_end}</span>
+                          <span className="font-semibold text-farm-green">{formatCurrency(booking.total_fee)}</span>
+                        </div>
+                      </div>
+                      {booking.status === 'pending' && (
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={async () => {
+                            const supabase = createClient();
+                            await supabase.from('storage_bookings').update({ status: 'confirmed' }).eq('id', booking.id);
+                            setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'confirmed' as const } : b));
+                            showToast('Booking confirmed.', 'success');
+                          }}
+                            className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition">
+                            Confirm
+                          </button>
+                          <button onClick={async () => {
+                            const supabase = createClient();
+                            await supabase.from('storage_bookings').update({ status: 'cancelled' }).eq('id', booking.id);
+                            setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'cancelled' as const } : b));
+                            showToast('Booking cancelled.', 'success');
+                          }}
+                            className="px-3 py-1.5 bg-white text-red-600 text-xs font-semibold rounded-lg border border-red-200 hover:bg-red-50 transition">
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                      {booking.status === 'checked_in' && (
+                        <button onClick={async () => {
+                          const supabase = createClient();
+                          await supabase.from('storage_bookings').update({ status: 'stored' }).eq('id', booking.id);
+                          setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'stored' as const } : b));
+                          showToast('Marked as stored.', 'success');
+                        }}
+                          className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition shrink-0">
+                          Mark Stored
+                        </button>
+                      )}
+                      {booking.status === 'stored' && (
+                        <button onClick={async () => {
+                          const supabase = createClient();
+                          await supabase.from('storage_bookings').update({ status: 'checked_out', checked_out_at: new Date().toISOString() }).eq('id', booking.id);
+                          setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'checked_out' as const, checked_out_at: new Date().toISOString() } : b));
+                          showToast('Marked as checked out.', 'success');
+                        }}
+                          className="px-3 py-1.5 bg-purple-500 text-white text-xs font-semibold rounded-lg hover:bg-purple-600 transition shrink-0">
+                          Check Out
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Learning Tab */}
+      {activeTab === 'learning' && (
+        <LearningTab
+          resources={learningResources}
+          categories={learningCategories}
+          onRefresh={async () => {
+            const supabase = createClient();
+            const { data: lr } = await supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false });
+            setLearningResources(lr || []);
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* News Tab */}
+      {activeTab === 'news' && (
+        <NewsTab showToast={showToast} />
       )}
 
       {/* Delete Confirmation Modal */}

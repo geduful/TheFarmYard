@@ -60,55 +60,64 @@ function BuyerDashboardContent() {
 
   useEffect(() => {
     const supabase = createClient();
-    async function load() {
+    let cancelled = false;
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      if (!p) { setLoading(false); return; }
+      if (cancelled || !p) { setLoading(false); return; }
       if (p.role === 'farmer') { router.push('/marketplace'); return; }
       setProfile(p);
 
+      // Handle checkout param (needs user + profile first)
       if (checkoutParam) {
         try {
           const params = JSON.parse(decodeURIComponent(checkoutParam)) as { listingId?: number };
           if (typeof params.listingId === 'number') {
             const { data: listing } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('id', params.listingId).eq('is_approved', true).single();
+            if (cancelled) return;
             if (listing && listing.farmer_id !== user.id) { setCheckoutListing(listing); setShowCheckout(true); }
           }
         } catch {}
       }
 
-      const { data: t } = await supabase.from('escrow_transactions').select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').eq('buyer_id', user.id).order('created_at', { ascending: false });
-      setTransactions(t || []);
+      // Parallelize all independent queries
+      const [txRes, brRes, sRes, ratingsRes] = await Promise.all([
+        supabase.from('escrow_transactions').select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').eq('buyer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('buy_requests').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('shipments').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id),
+      ]);
 
-      const { data: br } = await supabase.from('buy_requests').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false });
-      setBuyerRequests(br || []);
+      if (cancelled) return;
+      const s = sRes.data || [];
+      setTransactions(txRes.data || []);
+      setBuyerRequests(brRes.data || []);
+      setShipments(s);
+      setSubmittedRatings(new Set((ratingsRes.data || []).map((r: { transaction_id: number }) => r.transaction_id)));
 
-      // Load shipments
-      const { data: s } = await supabase.from('shipments').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false });
-      setShipments(s || []);
-
-      // Load shipment history for each shipment
-      if (s && s.length > 0) {
-        const historyMap: Record<number, ShipmentStatusHistory[]> = {};
-        for (const shipment of s) {
-          const { data: h } = await supabase
-            .from('shipment_status_history')
-            .select('*')
-            .eq('shipment_id', shipment.id)
-            .order('created_at', { ascending: true });
-          historyMap[shipment.id] = h || [];
+      // Fix N+1: batch-fetch all shipment history in one query
+      if (s.length > 0) {
+        const shipmentIds = s.map((sh) => sh.id);
+        const { data: allHistory } = await supabase
+          .from('shipment_status_history')
+          .select('*')
+          .in('shipment_id', shipmentIds)
+          .order('created_at', { ascending: true });
+        if (!cancelled && allHistory) {
+          const historyMap: Record<number, ShipmentStatusHistory[]> = {};
+          for (const h of allHistory) {
+            if (!historyMap[h.shipment_id]) historyMap[h.shipment_id] = [];
+            historyMap[h.shipment_id].push(h);
+          }
+          setShipmentHistory(historyMap);
         }
-        setShipmentHistory(historyMap);
       }
 
-      // Load already-rated transaction IDs
-      const { data: existingRatings } = await supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id);
-      setSubmittedRatings(new Set((existingRatings || []).map((r: { transaction_id: number }) => r.transaction_id)));
-
-      setLoading(false);
-    }
-    load();
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, [router, checkoutParam]);
 
   async function handleCheckout(e: React.FormEvent) {
@@ -270,7 +279,7 @@ function BuyerDashboardContent() {
               {profile.full_name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Welcome back, {profile.full_name.split(' ')[0]} 👋</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Welcome back, {profile.full_name.split(' ')[0]}</h2>
               <p className="text-sm text-gray-500 mt-0.5">Manage your orders and track deliveries</p>
             </div>
           </div>
@@ -322,17 +331,17 @@ function BuyerDashboardContent() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2">
           <button onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'orders' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'orders' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             My Orders
             {transactions.length > 0 && <span className="ml-1.5 text-xs opacity-70">({transactions.length})</span>}
           </button>
           <button onClick={() => setActiveTab('shipments')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Shipments
             {shipments.length > 0 && <span className="ml-1.5 text-xs opacity-70">({shipments.length})</span>}
           </button>
           <button onClick={() => setActiveTab('requests')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             My Requests
             {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
           </button>
@@ -596,11 +605,11 @@ function BuyerDashboardContent() {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Report Category</label>
                   <select value={reportCategory} onChange={(e) => setReportCategory(e.target.value as ReportCategory)}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400 bg-white text-sm">
-                    <option value="fraud">🚨 Fraud / Scam</option>
-                    <option value="delivery_issue">📦 Delivery Issue</option>
-                    <option value="listing_issue">📋 Listing Issue</option>
-                    <option value="account_issue">👤 Account Issue</option>
-                    <option value="other">💬 Other</option>
+                    <option value="fraud">Fraud / Scam</option>
+                    <option value="delivery_issue">Delivery Issue</option>
+                    <option value="listing_issue">Listing Issue</option>
+                    <option value="account_issue">Account Issue</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
 

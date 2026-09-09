@@ -24,44 +24,54 @@ export default function FarmerDashboard() {
 
   useEffect(() => {
     const supabase = createClient();
-    async function load() {
+    let cancelled = false;
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
       if (!user) { router.push('/login'); return; }
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      if (!p) { setLoading(false); return; }
+      if (cancelled || !p) { setLoading(false); return; }
       setProfile(p);
       if (p.role !== 'farmer') { router.push('/marketplace'); return; }
-      const { data: l } = await supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('farmer_id', user.id).order('created_at', { ascending: false });
-      setListings(l || []);
-      const { data: t } = await supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('farmer_id', user.id).order('created_at', { ascending: false });
-      setTransactions(t || []);
-      const { data: r } = await supabase.from('farmer_ratings').select('*, buyer:profiles!farmer_ratings_buyer_id_fkey(full_name)').eq('farmer_id', user.id).order('created_at', { ascending: false });
-      setRatings(r || []);
 
-      const { data: br } = await supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false });
-      setBuyerRequests(br || []);
+      // Parallelize all independent queries
+      const [listingsRes, transactionsRes, ratingsRes, requestsRes, shipmentsRes] = await Promise.all([
+        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('farmer_ratings').select('*, buyer:profiles!farmer_ratings_buyer_id_fkey(full_name)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false }),
+        supabase.from('shipments').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+      ]);
 
-      // Load shipments
-      const { data: s } = await supabase.from('shipments').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false });
-      setShipments(s || []);
+      if (cancelled) return;
+      const s = shipmentsRes.data || [];
+      setListings(listingsRes.data || []);
+      setTransactions(transactionsRes.data || []);
+      setRatings(ratingsRes.data || []);
+      setBuyerRequests(requestsRes.data || []);
+      setShipments(s);
 
-      // Load shipment history for each shipment
-      if (s && s.length > 0) {
-        const historyMap: Record<number, ShipmentStatusHistory[]> = {};
-        for (const shipment of s) {
-          const { data: h } = await supabase
-            .from('shipment_status_history')
-            .select('*')
-            .eq('shipment_id', shipment.id)
-            .order('created_at', { ascending: true });
-          historyMap[shipment.id] = h || [];
+      // Fix N+1: batch-fetch all shipment history in one query
+      if (s.length > 0) {
+        const shipmentIds = s.map((sh) => sh.id);
+        const { data: allHistory } = await supabase
+          .from('shipment_status_history')
+          .select('*')
+          .in('shipment_id', shipmentIds)
+          .order('created_at', { ascending: true });
+        if (!cancelled && allHistory) {
+          const historyMap: Record<number, ShipmentStatusHistory[]> = {};
+          for (const h of allHistory) {
+            if (!historyMap[h.shipment_id]) historyMap[h.shipment_id] = [];
+            historyMap[h.shipment_id].push(h);
+          }
+          setShipmentHistory(historyMap);
         }
-        setShipmentHistory(historyMap);
       }
 
-      setLoading(false);
-    }
-    load();
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, [router]);
 
   async function handleDismissWarning() {
@@ -88,7 +98,7 @@ export default function FarmerDashboard() {
               {profile.full_name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Welcome back, {profile.full_name.split(' ')[0]} 👋</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Welcome back, {profile.full_name.split(' ')[0]}</h2>
               <p className="text-sm text-gray-500 flex items-center gap-1.5 mt-0.5">
                 {profile.farm_location}
                 {profile.is_verified && <span className="text-emerald-green font-medium">• Verified Farmer</span>}
@@ -149,17 +159,17 @@ export default function FarmerDashboard() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2">
           <button onClick={() => setActiveTab('listings')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'listings' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'listings' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             My Listings
             {listings.length > 0 && <span className="ml-1.5 text-xs opacity-70">({listings.length})</span>}
           </button>
           <button onClick={() => setActiveTab('shipments')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Shipments
             {shipments.length > 0 && <span className="ml-1.5 text-xs opacity-70">({shipments.length})</span>}
           </button>
           <button onClick={() => setActiveTab('requests')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             Buyer Requests
             {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
           </button>

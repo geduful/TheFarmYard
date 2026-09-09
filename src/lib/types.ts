@@ -293,3 +293,418 @@ export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
   'delivered',
   'delivery_confirmed',
 ];
+
+// ─── Storage & Warehousing ──────────────────────────────────────────────────
+
+export type StorageFacilityType = 'cold_storage' | 'dry_storage' | 'refrigerated' | 'open_air' | 'silo';
+
+export type StorageFacilityStatus = 'active' | 'inactive' | 'maintenance';
+
+export type StorageBookingStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'checked_in'
+  | 'stored'
+  | 'checked_out'
+  | 'expired'
+  | 'cancelled';
+
+export type StorageItemCondition = 'excellent' | 'good' | 'fair' | 'poor' | 'damaged';
+
+export interface StorageFacility {
+  id: number;
+  name: string;
+  facility_type: StorageFacilityType;
+  location: string;
+  address: string | null;
+  description: string | null;
+  capacity_unit: string;
+  total_capacity: number;
+  available_capacity: number;
+  price_per_unit: number;
+  currency: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  has_climate_control: boolean;
+  has_security: boolean;
+  has_loading_dock: boolean;
+  image_url: string | null;
+  is_approved: boolean;
+  status: StorageFacilityStatus;
+  created_at: string;
+  updated_at: string;
+  active_bookings_count?: number;
+}
+
+export interface StorageBooking {
+  id: number;
+  facility_id: number;
+  farmer_id: string;
+  produce_name: string;
+  category: string | null;
+  quantity: number;
+  quantity_unit: string;
+  storage_start: string;
+  storage_end: string;
+  total_fee: number;
+  currency: string;
+  status: StorageBookingStatus;
+  special_notes: string | null;
+  rejection_reason: string | null;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  created_at: string;
+  updated_at: string;
+  facility?: Pick<StorageFacility, 'name' | 'facility_type' | 'location' | 'capacity_unit' | 'price_per_unit'>;
+  farmer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location'>;
+}
+
+export interface StorageInventory {
+  id: number;
+  booking_id: number;
+  facility_id: number;
+  farmer_id: string;
+  produce_name: string;
+  quantity: number;
+  quantity_unit: string;
+  condition: StorageItemCondition;
+  storage_location: string | null;
+  notes: string | null;
+  checked_in_at: string;
+  checked_out_at: string | null;
+  created_at: string;
+  booking?: Pick<StorageBooking, 'produce_name' | 'quantity' | 'quantity_unit' | 'storage_start' | 'storage_end'>;
+  facility?: Pick<StorageFacility, 'name' | 'location'>;
+  farmer?: Pick<Profile, 'full_name'>;
+}
+
+export const STORAGE_FACILITY_TYPE_CONFIG: Record<StorageFacilityType, { label: string; color: string; icon: string }> = {
+  cold_storage:   { label: 'Cold Storage',    color: 'bg-blue-100 text-blue-700',    icon: 'snowflake' },
+  dry_storage:    { label: 'Dry Storage',     color: 'bg-amber-100 text-amber-700',  icon: 'warehouse' },
+  refrigerated:   { label: 'Refrigerated',    color: 'bg-cyan-100 text-cyan-700',    icon: 'thermometer' },
+  open_air:       { label: 'Open Air',        color: 'bg-green-100 text-green-700',  icon: 'sun' },
+  silo:           { label: 'Silo',            color: 'bg-purple-100 text-purple-700', icon: 'cylinder' },
+};
+
+export const STORAGE_BOOKING_STATUS_CONFIG: Record<StorageBookingStatus, { label: string; color: string }> = {
+  pending:      { label: 'Pending',       color: 'bg-gray-100 text-gray-600' },
+  confirmed:    { label: 'Confirmed',     color: 'bg-blue-100 text-blue-700' },
+  checked_in:   { label: 'Checked In',    color: 'bg-indigo-100 text-indigo-700' },
+  stored:       { label: 'Stored',        color: 'bg-emerald-100 text-emerald-700' },
+  checked_out:  { label: 'Checked Out',   color: 'bg-green-100 text-green-700' },
+  expired:      { label: 'Expired',       color: 'bg-orange-100 text-orange-700' },
+  cancelled:    { label: 'Cancelled',     color: 'bg-red-100 text-red-600' },
+};
+
+export const STORAGE_BOOKING_STATUS_FLOW: StorageBookingStatus[] = [
+  'pending',
+  'confirmed',
+  'checked_in',
+  'stored',
+  'checked_out',
+];
+
+// ─── Learning Hub ───────────────────────────────────────────────────────────
+
+export type LearningContentType = 'article' | 'guide' | 'tutorial' | 'video' | 'checklist' | 'faq';
+
+export type LearningDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export type LearningResourceStatus = 'draft' | 'published' | 'archived';
+
+export type LearningProgressStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface LearningCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  resource_count?: number;
+}
+
+export interface LearningResource {
+  id: number;
+  title: string;
+  slug: string;
+  summary: string | null;
+  content: string;
+  category_id: number | null;
+  content_type: LearningContentType;
+  difficulty: LearningDifficulty;
+  reading_time_min: number;
+  author_name: string | null;
+  author_id: string | null;
+  featured_image: string | null;
+  tags: string[];
+  status: LearningResourceStatus;
+  is_featured: boolean;
+  view_count: number;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  category?: Pick<LearningCategory, 'name' | 'slug'>;
+}
+
+export interface LearningBookmark {
+  id: number;
+  user_id: string;
+  resource_id: number;
+  created_at: string;
+  resource?: LearningResource;
+}
+
+export interface LearningProgress {
+  id: number;
+  user_id: string;
+  resource_id: number;
+  status: LearningProgressStatus;
+  progress_pct: number;
+  last_read_at: string | null;
+  created_at: string;
+  updated_at: string;
+  resource?: Pick<LearningResource, 'title' | 'slug' | 'featured_image' | 'category_id' | 'reading_time_min'>;
+}
+
+export const LEARNING_CONTENT_TYPE_CONFIG: Record<LearningContentType, { label: string; color: string; icon: string }> = {
+  article:   { label: 'Article',   color: 'bg-blue-100 text-blue-700',    icon: 'document' },
+  guide:     { label: 'Guide',     color: 'bg-emerald-100 text-emerald-700', icon: 'book' },
+  tutorial:  { label: 'Tutorial',  color: 'bg-purple-100 text-purple-700', icon: 'academic' },
+  video:     { label: 'Video',     color: 'bg-red-100 text-red-700',      icon: 'play' },
+  checklist: { label: 'Checklist', color: 'bg-amber-100 text-amber-700',  icon: 'checklist' },
+  faq:       { label: 'FAQ',       color: 'bg-gray-100 text-gray-700',    icon: 'question' },
+};
+
+export const LEARNING_DIFFICULTY_CONFIG: Record<LearningDifficulty, { label: string; color: string }> = {
+  beginner:     { label: 'Beginner',     color: 'bg-green-100 text-green-700' },
+  intermediate: { label: 'Intermediate', color: 'bg-amber-100 text-amber-700' },
+  advanced:     { label: 'Advanced',     color: 'bg-red-100 text-red-700' },
+};
+
+export const LEARNING_STATUS_CONFIG: Record<LearningResourceStatus, { label: string; color: string }> = {
+  draft:     { label: 'Draft',     color: 'bg-gray-100 text-gray-600' },
+  published: { label: 'Published', color: 'bg-emerald-100 text-emerald-700' },
+  archived:  { label: 'Archived',  color: 'bg-orange-100 text-orange-700' },
+};
+
+export const LEARNING_PROGRESS_CONFIG: Record<LearningProgressStatus, { label: string; color: string }> = {
+  not_started: { label: 'Not Started', color: 'bg-gray-100 text-gray-600' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
+  completed:   { label: 'Completed',   color: 'bg-emerald-100 text-emerald-700' },
+};
+
+// ─── News & Market Intelligence Types ──────────────────────────────
+
+export type NewsSourceType = 'government' | 'research' | 'international' | 'publication' | 'market_service' | 'weather' | 'news_org' | 'ngo' | 'other';
+export type NewsSourceStatus = 'active' | 'inactive' | 'pending';
+export type NewsArticleStatus = 'pending' | 'approved' | 'published' | 'rejected' | 'archived';
+export type OpportunityStatus = 'open' | 'closed' | 'expired' | 'upcoming';
+export type PriceTrend = 'up' | 'down' | 'stable' | 'unknown';
+export type OpportunityType = 'government_program' | 'grant' | 'training' | 'procurement' | 'competition' | 'investment' | 'export' | 'buyer' | 'event' | 'other';
+
+export interface NewsSource {
+  id: number;
+  name: string;
+  website_url: string | null;
+  feed_url: string | null;
+  api_url: string | null;
+  source_type: NewsSourceType;
+  country: string;
+  region: string | null;
+  trust_level: 'verified' | 'unverified' | 'internal';
+  status: NewsSourceStatus;
+  description: string | null;
+  last_fetched_at: string | null;
+  fetch_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewsCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface NewsArticle {
+  id: number;
+  title: string;
+  slug: string;
+  summary: string | null;
+  content: string | null;
+  source_id: number | null;
+  source_name: string | null;
+  source_url: string | null;
+  image_url: string | null;
+  category_id: number | null;
+  tags: string[];
+  region: string | null;
+  country: string;
+  author_name: string | null;
+  status: NewsArticleStatus;
+  is_featured: boolean;
+  ai_summary: string | null;
+  ai_generated: boolean;
+  view_count: number;
+  published_at: string | null;
+  fetched_at: string | null;
+  created_at: string;
+  updated_at: string;
+  category?: Pick<NewsCategory, 'name' | 'slug'>;
+  source?: Pick<NewsSource, 'name' | 'website_url' | 'trust_level'>;
+}
+
+export interface Commodity {
+  id: number;
+  name: string;
+  slug: string;
+  category: string;
+  unit: string;
+  image_url: string | null;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+}
+
+export interface MarketPrice {
+  id: number;
+  commodity_id: number;
+  market_name: string;
+  region: string | null;
+  price: number;
+  currency: string;
+  unit: string;
+  previous_price: number | null;
+  price_change: number | null;
+  price_change_pct: number | null;
+  trend: PriceTrend;
+  source_id: number | null;
+  data_date: string;
+  fetched_at: string;
+  created_at: string;
+  commodity?: Pick<Commodity, 'name' | 'slug' | 'unit' | 'category'>;
+  source?: Pick<NewsSource, 'name' | 'trust_level'>;
+}
+
+export interface MarketPriceHistory {
+  id: number;
+  commodity_id: number;
+  market_name: string;
+  avg_price: number;
+  min_price: number | null;
+  max_price: number | null;
+  currency: string;
+  unit: string;
+  sample_count: number;
+  period_start: string;
+  period_end: string;
+  created_at: string;
+}
+
+export interface MarketAlert {
+  id: number;
+  user_id: string;
+  commodity_id: number;
+  market_name: string | null;
+  alert_type: 'above' | 'below';
+  threshold_price: number;
+  is_active: boolean;
+  last_triggered_at: string | null;
+  created_at: string;
+  commodity?: Pick<Commodity, 'name' | 'slug' | 'unit'>;
+}
+
+export interface Opportunity {
+  id: number;
+  title: string;
+  slug: string;
+  description: string;
+  organization: string | null;
+  opportunity_type: OpportunityType;
+  location: string | null;
+  eligibility: string | null;
+  deadline: string | null;
+  source_url: string | null;
+  source_id: number | null;
+  image_url: string | null;
+  status: OpportunityStatus;
+  is_featured: boolean;
+  tags: string[];
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  source?: Pick<NewsSource, 'name' | 'website_url'>;
+}
+
+export interface NewsBookmark {
+  id: number;
+  user_id: string;
+  article_id: number;
+  created_at: string;
+  article?: NewsArticle;
+}
+
+// ─── News & Market Config Objects ──────────────────────────────────
+
+export const NEWS_SOURCE_TYPE_CONFIG: Record<NewsSourceType, { label: string; color: string }> = {
+  government:    { label: 'Government',    color: 'bg-blue-100 text-blue-700' },
+  research:      { label: 'Research',      color: 'bg-purple-100 text-purple-700' },
+  international: { label: 'International', color: 'bg-indigo-100 text-indigo-700' },
+  publication:   { label: 'Publication',   color: 'bg-amber-100 text-amber-700' },
+  market_service:{ label: 'Market Data',   color: 'bg-emerald-100 text-emerald-700' },
+  weather:       { label: 'Weather',       color: 'bg-cyan-100 text-cyan-700' },
+  news_org:      { label: 'News Org',      color: 'bg-rose-100 text-rose-700' },
+  ngo:           { label: 'NGO',           color: 'bg-teal-100 text-teal-700' },
+  other:         { label: 'Other',         color: 'bg-gray-100 text-gray-700' },
+};
+
+export const NEWS_STATUS_CONFIG: Record<NewsArticleStatus, { label: string; color: string }> = {
+  pending:   { label: 'Pending',   color: 'bg-amber-100 text-amber-700' },
+  approved:  { label: 'Approved',  color: 'bg-blue-100 text-blue-700' },
+  published: { label: 'Published', color: 'bg-emerald-100 text-emerald-700' },
+  rejected:  { label: 'Rejected',  color: 'bg-red-100 text-red-700' },
+  archived:  { label: 'Archived',  color: 'bg-gray-100 text-gray-600' },
+};
+
+export const OPPORTUNITY_STATUS_CONFIG: Record<OpportunityStatus, { label: string; color: string }> = {
+  open:     { label: 'Open',     color: 'bg-emerald-100 text-emerald-700' },
+  closed:   { label: 'Closed',   color: 'bg-gray-100 text-gray-600' },
+  expired:  { label: 'Expired',  color: 'bg-red-100 text-red-700' },
+  upcoming: { label: 'Upcoming', color: 'bg-blue-100 text-blue-700' },
+};
+
+export const OPPORTUNITY_TYPE_CONFIG: Record<OpportunityType, { label: string; color: string }> = {
+  government_program: { label: 'Government Program', color: 'bg-blue-100 text-blue-700' },
+  grant:              { label: 'Grant',              color: 'bg-emerald-100 text-emerald-700' },
+  training:           { label: 'Training',           color: 'bg-purple-100 text-purple-700' },
+  procurement:        { label: 'Procurement',        color: 'bg-amber-100 text-amber-700' },
+  competition:        { label: 'Competition',        color: 'bg-rose-100 text-rose-700' },
+  investment:         { label: 'Investment',         color: 'bg-indigo-100 text-indigo-700' },
+  export:             { label: 'Export',             color: 'bg-cyan-100 text-cyan-700' },
+  buyer:              { label: 'Buyer',              color: 'bg-teal-100 text-teal-700' },
+  event:              { label: 'Event',              color: 'bg-violet-100 text-violet-700' },
+  other:              { label: 'Other',              color: 'bg-gray-100 text-gray-700' },
+};
+
+export const PRICE_TREND_CONFIG: Record<PriceTrend, { label: string; color: string; icon: string }> = {
+  up:      { label: 'Rising',  color: 'text-red-600',  icon: '↑' },
+  down:    { label: 'Falling', color: 'text-emerald-600', icon: '↓' },
+  stable:  { label: 'Stable',  color: 'text-gray-600', icon: '→' },
+  unknown: { label: 'N/A',     color: 'text-gray-400', icon: '—' },
+};
+
+export const NEWS_MARKET_REGIONS = [
+  'Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central',
+  'Northern', 'Volta', 'Upper East', 'Upper West', 'Brong Ahafo',
+  'Western North', 'Ahafo', 'Bono East', 'Oti', 'Savannah',
+] as const;
