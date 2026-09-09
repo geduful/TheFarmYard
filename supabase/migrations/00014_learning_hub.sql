@@ -10,32 +10,48 @@
 
 -- ─── ENUM TYPES ─────────────────────────────────────────────────────────────
 
-CREATE TYPE IF NOT EXISTS learning_content_type AS ENUM (
-  'article',
-  'guide',
-  'tutorial',
-  'video',
-  'checklist',
-  'faq'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'learning_content_type') THEN
+    CREATE TYPE learning_content_type AS ENUM (
+      'article',
+      'guide',
+      'tutorial',
+      'video',
+      'checklist',
+      'faq'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS learning_difficulty AS ENUM (
-  'beginner',
-  'intermediate',
-  'advanced'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'learning_difficulty') THEN
+    CREATE TYPE learning_difficulty AS ENUM (
+      'beginner',
+      'intermediate',
+      'advanced'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS learning_resource_status AS ENUM (
-  'draft',
-  'published',
-  'archived'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'learning_resource_status') THEN
+    CREATE TYPE learning_resource_status AS ENUM (
+      'draft',
+      'published',
+      'archived'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS learning_progress_status AS ENUM (
-  'not_started',
-  'in_progress',
-  'completed'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'learning_progress_status') THEN
+    CREATE TYPE learning_progress_status AS ENUM (
+      'not_started',
+      'in_progress',
+      'completed'
+    );
+  END IF;
+END $$;
 
 -- ─── LEARNING CATEGORIES ────────────────────────────────────────────────────
 

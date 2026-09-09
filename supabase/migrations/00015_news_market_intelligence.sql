@@ -6,22 +6,42 @@
 -- 1. ENUMS
 -- ----------------------------------------------------------------
 
-CREATE TYPE IF NOT EXISTS news_source_type AS ENUM (
-  'government', 'research', 'international', 'publication',
-  'market_service', 'weather', 'news_org', 'ngo', 'other'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'news_source_type') THEN
+    CREATE TYPE news_source_type AS ENUM (
+      'government', 'research', 'international', 'publication',
+      'market_service', 'weather', 'news_org', 'ngo', 'other'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS news_source_status AS ENUM ('active', 'inactive', 'pending');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'news_source_status') THEN
+    CREATE TYPE news_source_status AS ENUM ('active', 'inactive', 'pending');
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS news_article_status AS ENUM (
-  'pending', 'approved', 'published', 'rejected', 'archived'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'news_article_status') THEN
+    CREATE TYPE news_article_status AS ENUM (
+      'pending', 'approved', 'published', 'rejected', 'archived'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS opportunity_status AS ENUM (
-  'open', 'closed', 'expired', 'upcoming'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'opportunity_status') THEN
+    CREATE TYPE opportunity_status AS ENUM (
+      'open', 'closed', 'expired', 'upcoming'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS price_trend AS ENUM ('up', 'down', 'stable', 'unknown');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'price_trend') THEN
+    CREATE TYPE price_trend AS ENUM ('up', 'down', 'stable', 'unknown');
+  END IF;
+END $$;
 
 -- 2. TRUSTED SOURCES
 -- ----------------------------------------------------------------

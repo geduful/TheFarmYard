@@ -9,37 +9,53 @@
 
 -- ─── ENUM TYPES ─────────────────────────────────────────────────────────────
 
-CREATE TYPE IF NOT EXISTS storage_facility_type AS ENUM (
-  'cold_storage',
-  'dry_storage',
-  'refrigerated',
-  'open_air',
-  'silo'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'storage_facility_type') THEN
+    CREATE TYPE storage_facility_type AS ENUM (
+      'cold_storage',
+      'dry_storage',
+      'refrigerated',
+      'open_air',
+      'silo'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS storage_facility_status AS ENUM (
-  'active',
-  'inactive',
-  'maintenance'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'storage_facility_status') THEN
+    CREATE TYPE storage_facility_status AS ENUM (
+      'active',
+      'inactive',
+      'maintenance'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS storage_booking_status AS ENUM (
-  'pending',
-  'confirmed',
-  'checked_in',
-  'stored',
-  'checked_out',
-  'expired',
-  'cancelled'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'storage_booking_status') THEN
+    CREATE TYPE storage_booking_status AS ENUM (
+      'pending',
+      'confirmed',
+      'checked_in',
+      'stored',
+      'checked_out',
+      'expired',
+      'cancelled'
+    );
+  END IF;
+END $$;
 
-CREATE TYPE IF NOT EXISTS storage_item_condition AS ENUM (
-  'excellent',
-  'good',
-  'fair',
-  'poor',
-  'damaged'
-);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'storage_item_condition') THEN
+    CREATE TYPE storage_item_condition AS ENUM (
+      'excellent',
+      'good',
+      'fair',
+      'poor',
+      'damaged'
+    );
+  END IF;
+END $$;
 
 -- ─── STORAGE FACILITIES ─────────────────────────────────────────────────────
 
