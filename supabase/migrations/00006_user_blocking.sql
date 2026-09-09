@@ -13,6 +13,7 @@ ALTER TABLE profiles
 --    (profiles_update_admin_tier was added in migration 00004 — this extends it)
 --    Drop and recreate to ensure it covers is_blocked too.
 DROP POLICY IF EXISTS "profiles_update_admin_tier" ON profiles;
+DROP POLICY IF EXISTS "profiles_update_admin" ON profiles;
 
 CREATE POLICY "profiles_update_admin" ON profiles
   FOR UPDATE USING (
