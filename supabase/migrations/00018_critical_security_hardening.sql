@@ -38,13 +38,15 @@ CREATE POLICY "reset_codes_delete" ON password_reset_codes
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, phone_number, role, is_active)
+  INSERT INTO public.profiles (id, full_name, phone_number, email, role, farm_location, verification_tier)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'phone_number', ''),
+    COALESCE(NEW.raw_user_meta_data->>'email', ''),
     COALESCE(NEW.raw_user_meta_data->>'role', 'buyer'),
-    TRUE
+    COALESCE(NEW.raw_user_meta_data->>'farm_location', ''),
+    COALESCE(NEW.raw_user_meta_data->>'verification_tier', 'none')
   );
   RETURN NEW;
 END;
@@ -217,6 +219,7 @@ BEGIN
   v_total := v_verification_score + v_rating_score + v_transaction_score + v_account_age_score;
 
   RETURN QUERY SELECT v_total, jsonb_build_object(
+    'trust_score', v_total,
     'verification', v_verification_score,
     'rating', v_rating_score,
     'transaction', v_transaction_score,
@@ -249,7 +252,7 @@ BEGIN
 
   FOR v_listing IN
     SELECT l.*, p.verification_tier, p.farm_location,
-           public.calculate_farmer_trust_score(l.farmer_id) AS trust_score_data,
+           (SELECT breakdown FROM public.calculate_farmer_trust_score(l.farmer_id)) AS trust_score_data,
            COALESCE((SELECT AVG(r.rating) FROM public.farmer_ratings r WHERE r.farmer_id = l.farmer_id), 0) AS avg_rating
     FROM public.listings l
     JOIN public.profiles p ON l.farmer_id = p.id
@@ -457,6 +460,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- 4. Fix re_registration_requests RLS
 -- ============================================================
 DROP POLICY IF EXISTS "rereg_insert_anyone" ON re_registration_requests;
+DROP POLICY IF EXISTS "rereg_insert_authenticated" ON re_registration_requests;
+DROP POLICY IF EXISTS "rereg_select_own_email" ON re_registration_requests;
 
 -- Require authentication for re-registration requests
 CREATE POLICY "rereg_insert_authenticated" ON re_registration_requests
@@ -496,32 +501,34 @@ CREATE POLICY "profiles_select_public" ON profiles
 -- ============================================================
 -- 6. Capacity trigger functions — make SECURITY DEFINER
 -- ============================================================
+-- Logic preserves 00013's status-transition-based capacity management
+-- but adds SECURITY DEFINER + search_path for privilege escalation protection.
 CREATE OR REPLACE FUNCTION public.update_facility_capacity_on_booking()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF TG_OP = 'INSERT' THEN
+  IF NEW.status IN ('confirmed', 'checked_in', 'stored') AND OLD.status NOT IN ('confirmed', 'checked_in', 'stored') THEN
+    -- Deduct capacity when booking becomes active
     UPDATE public.storage_facilities
-    SET current_occupancy = current_occupancy + NEW.quantity
+    SET available_capacity = GREATEST(available_capacity - NEW.quantity, 0)
     WHERE id = NEW.facility_id;
-  ELSIF TG_OP = 'UPDATE' AND OLD.status != 'checked_out' AND NEW.status = 'checked_out' THEN
+  ELSIF OLD.status IN ('confirmed', 'checked_in', 'stored') AND NEW.status IN ('checked_out', 'cancelled', 'expired') THEN
+    -- Restore capacity when booking ends or is cancelled
     UPDATE public.storage_facilities
-    SET current_occupancy = GREATEST(0, current_occupancy - NEW.quantity)
-    WHERE id = NEW.facility_id;
-  ELSIF TG_OP = 'DELETE' THEN
-    UPDATE public.storage_facilities
-    SET current_occupancy = GREATEST(0, current_occupancy - OLD.quantity)
+    SET available_capacity = LEAST(available_capacity + OLD.quantity, total_capacity)
     WHERE id = OLD.facility_id;
   END IF;
-  RETURN COALESCE(NEW, OLD);
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.update_facility_capacity_on_insert()
 RETURNS TRIGGER AS $$
 BEGIN
-  UPDATE public.storage_facilities
-  SET current_occupancy = current_occupancy + NEW.quantity
-  WHERE id = NEW.facility_id;
+  IF NEW.status IN ('confirmed', 'checked_in', 'stored') THEN
+    UPDATE public.storage_facilities
+    SET available_capacity = GREATEST(available_capacity - NEW.quantity, 0)
+    WHERE id = NEW.facility_id;
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

@@ -19,14 +19,17 @@ CREATE TABLE IF NOT EXISTS payout_details (
 ALTER TABLE payout_details ENABLE ROW LEVEL SECURITY;
 
 -- Owner can read their own payout details
+DROP POLICY IF EXISTS "payout_details_select_own" ON payout_details;
 CREATE POLICY payout_details_select_own ON payout_details
   FOR SELECT USING (auth.uid() = user_id);
 
 -- Owner can insert their own payout details
+DROP POLICY IF EXISTS "payout_details_insert_own" ON payout_details;
 CREATE POLICY payout_details_insert_own ON payout_details
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Owner can update their own payout details
+DROP POLICY IF EXISTS "payout_details_update_own" ON payout_details;
 CREATE POLICY payout_details_update_own ON payout_details
   FOR UPDATE USING (auth.uid() = user_id);
 
@@ -63,6 +66,7 @@ CREATE TABLE IF NOT EXISTS ai_rate_limits (
 ALTER TABLE ai_rate_limits ENABLE ROW LEVEL SECURITY;
 
 -- Only service role can access rate limit tracking (via SECURITY DEFINER function)
+DROP POLICY IF EXISTS "ai_rate_limits_service_all" ON ai_rate_limits;
 CREATE POLICY ai_rate_limits_service_all ON ai_rate_limits
   FOR ALL USING (false);
 
