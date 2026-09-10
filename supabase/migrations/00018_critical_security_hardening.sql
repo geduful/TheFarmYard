@@ -3,6 +3,25 @@
 --         re_registration_requests RLS, profiles payout data exposure, escrow/shipment role checks.
 
 -- ============================================================
+-- 0. Drop functions that changed return types (must precede CREATE OR REPLACE)
+-- ============================================================
+DROP TRIGGER IF EXISTS trg_validate_shipment_status ON shipments;
+DROP TRIGGER IF EXISTS trg_facility_capacity_on_booking ON storage_bookings;
+DROP TRIGGER IF EXISTS trg_facility_capacity_on_insert ON storage_bookings;
+
+DROP FUNCTION IF EXISTS public.handle_new_user();
+DROP FUNCTION IF EXISTS public.prevent_listing_self_approval();
+DROP FUNCTION IF EXISTS public.guard_escrow_update();
+DROP FUNCTION IF EXISTS public.rate_limit_reset_codes();
+DROP FUNCTION IF EXISTS public.cleanup_expired_reset_codes();
+DROP FUNCTION IF EXISTS public.calculate_farmer_trust_score(UUID);
+DROP FUNCTION IF EXISTS public.match_buyer_request_to_listings(BIGINT);
+DROP FUNCTION IF EXISTS public.validate_shipment_status_transition();
+DROP FUNCTION IF EXISTS public.create_notification(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT);
+DROP FUNCTION IF EXISTS public.update_facility_capacity_on_booking();
+DROP FUNCTION IF EXISTS public.update_facility_capacity_on_insert();
+
+-- ============================================================
 -- 1. Fix password_reset_codes RLS (CRITICAL: account takeover)
 -- ============================================================
 DROP POLICY IF EXISTS "reset_codes_insert" ON password_reset_codes;
