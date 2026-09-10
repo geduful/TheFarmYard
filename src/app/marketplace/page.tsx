@@ -8,6 +8,8 @@ import type { Listing, Category, SortOption } from '@/lib/types';
 import { formatCurrency, formatPriceUnit, sortByOption } from '@/lib/utils';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 
+const PAGE_SIZE = 24;
+
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
 
 const sortOptions: { value: SortOption; label: string }[] = [
@@ -87,15 +89,27 @@ export default function MarketplacePage() {
   const [locations, setLocations] = useState<string[]>([]);
   const [profile, setProfile] = useState<{ role: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recommended');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [page, setPage] = useState(0);
+  const [totalResults, setTotalResults] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLoading(true);
       setLoadError('');
       try {
         const supabase = createClient();
@@ -106,21 +120,67 @@ export default function MarketplacePage() {
           if (!cancelled) setProfile(p);
         }
 
+        const { data: locData } = await supabase
+          .from('profiles')
+          .select('farm_location')
+          .not('farm_location', 'is', null);
+        if (!cancelled && locData) {
+          const unique = [...new Set(locData.map((p) => p.farm_location).filter(Boolean))] as string[];
+          setLocations(unique);
+        }
+
         let query = supabase
           .from('listings')
-          .select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)')
-          .eq('is_approved', true)
-          .order('created_at', { ascending: false });
+          .select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)', { count: 'exact' })
+          .eq('is_approved', true);
 
         if (selectedCategory) query = query.eq('category', selectedCategory);
 
-        const { data, error } = await query;
+        if (selectedLocation) {
+          const { data: farmerProfiles } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('farm_location', selectedLocation);
+          const farmerIds = farmerProfiles?.map((p) => p.id) || [];
+          if (farmerIds.length === 0) {
+            setListings([]);
+            setTotalResults(0);
+            setLoading(false);
+            return;
+          }
+          query = query.in('farmer_id', farmerIds);
+        }
+
+        if (debouncedSearch.trim()) {
+          const q = debouncedSearch.trim();
+          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,category.ilike.%${q}%,location.ilike.%${q}%`);
+        }
+
+        switch (sortBy) {
+          case 'newest':
+            query = query.order('created_at', { ascending: false });
+            break;
+          case 'price_asc':
+            query = query.order('price_per_unit', { ascending: true });
+            break;
+          case 'price_desc':
+            query = query.order('price_per_unit', { ascending: false });
+            break;
+          case 'recommended':
+          default:
+            query = query.order('is_promoted', { ascending: false }).order('created_at', { ascending: false });
+            break;
+        }
+
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        query = query.range(from, to);
+
+        const { data, error, count } = await query;
         if (cancelled) return;
         if (error) throw new Error(error.message);
-        const rows = (data || []) as Listing[];
-        setListings(rows);
-        const uniqueLocations = [...new Set(rows.map((l) => l.farmer?.farm_location).filter(Boolean))] as string[];
-        setLocations(uniqueLocations);
+        setListings((data || []) as Listing[]);
+        setTotalResults(count || 0);
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load listings.');
       } finally {
@@ -129,33 +189,21 @@ export default function MarketplacePage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [selectedCategory, retryKey]);
+  }, [selectedCategory, selectedLocation, debouncedSearch, sortBy, page, retryKey]);
 
-  const filteredListings = useMemo(() => {
-    let result = selectedLocation
-      ? listings.filter((l) => l.farmer?.farm_location === selectedLocation)
-      : [...listings];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((l) =>
-        l.title.toLowerCase().includes(q) ||
-        l.description?.toLowerCase().includes(q) ||
-        l.category.toLowerCase().includes(q) ||
-        l.farmer?.full_name?.toLowerCase().includes(q) ||
-        l.location?.toLowerCase().includes(q)
+  const displayListings = useMemo(() => {
+    if (sortBy === 'highest_rated' || sortBy === 'most_trusted') {
+      return sortByOption(
+        listings,
+        sortBy,
+        (l) => (l as Listing & { average_rating?: number }).average_rating,
+        (l) => (l as Listing & { trust_score?: number }).trust_score,
       );
     }
+    return listings;
+  }, [listings, sortBy]);
 
-    result = sortByOption(
-      result,
-      sortBy,
-      (l) => (l as Listing & { average_rating?: number }).average_rating,
-      (l) => (l as Listing & { trust_score?: number }).trust_score,
-    );
-
-    return result;
-  }, [listings, selectedLocation, searchQuery, sortBy]);
+  const totalPages = Math.ceil(totalResults / PAGE_SIZE);
 
   function handleBuy(listing: Listing) {
     if (!profile) { router.push('/login'); return; }
@@ -172,12 +220,19 @@ export default function MarketplacePage() {
 
   function handleSelectCategory(c: string) {
     setSelectedCategory(c);
+    setPage(0);
     setShowMobileFilters(false);
   }
 
   function handleSelectLocation(l: string) {
     setSelectedLocation(l);
+    setPage(0);
     setShowMobileFilters(false);
+  }
+
+  function handleSortChange(value: SortOption) {
+    setSortBy(value);
+    setPage(0);
   }
 
   return (
@@ -253,11 +308,11 @@ export default function MarketplacePage() {
                   className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-farm-green/20 focus:border-farm-green shadow-sm"
                 />
               </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button onClick={() => setShowMobileFilters(true)} className="md:hidden px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium shadow-sm hover:bg-gray-50 transition">Filters</button>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  onChange={(e) => handleSortChange(e.target.value as SortOption)}
                   className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-farm-green/20 shadow-sm"
                 >
                   {sortOptions.map((opt) => (
@@ -265,7 +320,7 @@ export default function MarketplacePage() {
                   ))}
                 </select>
                 <div className="text-sm text-gray-500">
-                  <span className="font-semibold text-gray-900">{filteredListings.length}</span> result{filteredListings.length !== 1 ? 's' : ''}
+                  <span className="font-semibold text-gray-900">{totalResults}</span> result{totalResults !== 1 ? 's' : ''}
                 </div>
               </div>
             </div>
@@ -299,91 +354,127 @@ export default function MarketplacePage() {
                   <p className="text-sm text-red-600 mb-1">{loadError}</p>
                   <p className="text-sm text-gray-500 mb-5">Check your connection and try again.</p>
                   <button
-                    onClick={() => { setLoading(true); setRetryKey((k) => k + 1); }}
+                    onClick={() => { setLoading(true); setRetryKey((k) => k + 1); setPage(0); }}
                     className="px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm"
                   >
                     Reload listings
                   </button>
                 </div>
               </div>
-            ) : filteredListings.length === 0 ? (
+            ) : displayListings.length === 0 ? (
               <div className="text-center py-32 animate-fade-in">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">No listings found</h3>
-                <p className="text-gray-500">{searchQuery ? 'Try a different search term.' : 'No listings match your filters.'}</p>
+                <p className="text-gray-500">{debouncedSearch ? 'Try a different search term.' : 'No listings match your filters.'}</p>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredListings.map((listing) => (
-                  <div key={listing.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden card-hover animate-fade-in relative">
-                    {listing.is_promoted && (
-                      <div className="absolute top-3 left-3 z-10">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-lg">
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
-                          Featured
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden cursor-pointer"
-                      onClick={() => router.push(`/marketplace/${listing.id}`)}
-                    >
-                      {listing.image_url ? (
-                        <Image src={listing.image_url} alt={listing.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">
-                          <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+              <>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {displayListings.map((listing) => (
+                    <div key={listing.id} className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden card-hover animate-fade-in relative">
+                      {listing.is_promoted && (
+                        <div className="absolute top-3 left-3 z-10">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-lg">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" /></svg>
+                            Featured
+                          </span>
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      {listing.farmer?.is_verified && (
-                        <div className="absolute top-3 right-3">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500 text-white shadow-lg">✓ Verified</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold text-farm-green bg-farm-green/10 px-2.5 py-1 rounded-full">{listing.category}</span>
-                        {listing.farmer?.farm_location && (
-                          <span className="text-xs text-gray-400">{listing.location || listing.farmer.farm_location}</span>
-                        )}
-                      </div>
-                      <h3
-                        className="font-semibold text-gray-900 text-base mb-1 leading-snug cursor-pointer hover:text-farm-green transition"
+                      <div
+                        className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden cursor-pointer"
                         onClick={() => router.push(`/marketplace/${listing.id}`)}
                       >
-                        {listing.title}
-                      </h3>
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <span className="text-xl font-bold text-farm-green">{formatCurrency(listing.price_per_unit)}</span>
-                          <span className="text-xs text-gray-400 ml-1">{formatPriceUnit(listing.price_unit || 'unit')}</span>
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
-                          {listing.quantity_available}
-                        </span>
+                        {listing.image_url ? (
+                          <Image src={listing.image_url} alt={listing.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">
+                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        {listing.farmer?.is_verified && (
+                          <div className="absolute top-3 right-3">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500 text-white shadow-lg">✓ Verified</span>
+                          </div>
+                        )}
                       </div>
-                      {listing.description && (
-                        <p className="text-sm text-gray-500 mb-4 line-clamp-2 leading-relaxed">{listing.description}</p>
-                      )}
-                      {profile?.role === 'buyer' ? (
-                        <div className="flex gap-2">
-                          <button onClick={() => router.push(`/marketplace/${listing.id}`)} className="flex-1 py-2.5 border border-farm-green text-farm-green font-semibold rounded-xl hover:bg-farm-green/5 transition text-sm">
-                            View Details
-                          </button>
-                          <button onClick={() => handleBuy(listing)} className="flex-1 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
-                            Buy Now
-                          </button>
+                      <div className="p-5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold text-farm-green bg-farm-green/10 px-2.5 py-1 rounded-full">{listing.category}</span>
+                          {listing.farmer?.farm_location && (
+                            <span className="text-xs text-gray-400">{listing.location || listing.farmer.farm_location}</span>
+                          )}
                         </div>
-                      ) : !profile ? (
-                        <button onClick={() => router.push('/login')} className="w-full py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
-                          Sign In to Buy
-                        </button>
-                      ) : null}
+                        <h3
+                          className="font-semibold text-gray-900 text-base mb-1 leading-snug cursor-pointer hover:text-farm-green transition"
+                          onClick={() => router.push(`/marketplace/${listing.id}`)}
+                        >
+                          {listing.title}
+                        </h3>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <span className="text-xl font-bold text-farm-green">{formatCurrency(listing.price_per_unit)}</span>
+                            <span className="text-xs text-gray-400 ml-1">{formatPriceUnit(listing.price_unit || 'unit')}</span>
+                          </div>
+                          <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+                            {listing.quantity_available}
+                          </span>
+                        </div>
+                        {listing.description && (
+                          <p className="text-sm text-gray-500 mb-4 line-clamp-2 leading-relaxed">{listing.description}</p>
+                        )}
+                        {profile?.role === 'buyer' ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => router.push(`/marketplace/${listing.id}`)} className="flex-1 py-2.5 border border-farm-green text-farm-green font-semibold rounded-xl hover:bg-farm-green/5 transition text-sm">
+                              View Details
+                            </button>
+                            <button onClick={() => handleBuy(listing)} className="flex-1 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
+                              Buy Now
+                            </button>
+                          </div>
+                        ) : !profile ? (
+                          <button onClick={() => router.push('/login')} className="w-full py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm text-sm">
+                            Sign In to Buy
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-10 mb-4">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm"
+                    >
+                      ← Previous
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i).map((i) => (
+                        <button
+                          key={i}
+                          onClick={() => setPage(i)}
+                          className={`w-9 h-9 text-sm font-medium rounded-lg transition ${
+                            i === page
+                              ? 'bg-farm-green text-white shadow-sm'
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={page >= totalPages - 1}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm"
+                    >
+                      Next →
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </main>

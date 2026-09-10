@@ -58,8 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_br_buyer_id ON buy_requests (buyer_id);
 -- ============================================================
 -- 10. farmer_ratings — lookup by farmer
 -- ============================================================
-CREATE INDEX IF NOT EXISTS idx_fr_farmer_id ON farmer_ratings (farmer_id);
-
+-- idx_farmer_ratings_farmer (farmer_id, rating) from 00009 covers farmer_id lookups
 -- ============================================================
 -- 11. learning_categories — sorted by display_order
 -- ============================================================

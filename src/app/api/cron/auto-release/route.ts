@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   // Batch-fetch all user phone numbers upfront (eliminates N+1)
   const allUserIds = [...new Set((due ?? []).flatMap(tx => [tx.buyer_id, tx.farmer_id]))];
   const phoneMap = new Map<string, string>();
+  const payoutMap = new Map<string, { bank_name: string; account_number: string }>();
   if (allUserIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
@@ -44,6 +45,22 @@ export async function GET(request: NextRequest) {
     if (profiles) {
       for (const p of profiles) {
         if (p.phone_number) phoneMap.set(p.id, p.phone_number);
+      }
+    }
+
+    // Batch-fetch all payout details (eliminates per-transaction N+1)
+    const farmerIds = [...new Set((due ?? []).map(tx => tx.farmer_id))];
+    if (farmerIds.length > 0) {
+      const { data: payouts } = await supabase
+        .from('payout_details')
+        .select('user_id, bank_name, account_number')
+        .in('user_id', farmerIds);
+      if (payouts) {
+        for (const pd of payouts) {
+          if (pd.bank_name && pd.account_number) {
+            payoutMap.set(pd.user_id, { bank_name: pd.bank_name, account_number: pd.account_number });
+          }
+        }
       }
     }
   }
@@ -63,12 +80,8 @@ export async function GET(request: NextRequest) {
     released += 1;
 
     if (isPaymentsConfigured() && !tx.payout_reference) {
-      const { data: payout } = await supabase
-        .from('payout_details')
-        .select('bank_name, account_number')
-        .eq('user_id', tx.farmer_id)
-        .single();
-      if (payout?.bank_name && payout?.account_number) {
+      const payout = payoutMap.get(tx.farmer_id);
+      if (payout) {
         try {
           const { reference } = await initiateTransfer({
             amount: Number(tx.total_farmer_yield),
