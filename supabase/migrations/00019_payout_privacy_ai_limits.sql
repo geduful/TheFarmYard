@@ -38,6 +38,11 @@ CREATE POLICY payout_details_update_own ON payout_details
 -- ============================================================
 -- 2. Migrate existing payout data from profiles to payout_details
 -- ============================================================
+-- Ensure payout columns exist (added in 00008, but guard for safety)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_bank TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_number TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_name TEXT;
+
 INSERT INTO payout_details (user_id, bank_name, account_number, account_name, created_at)
 SELECT id, payout_account_bank, payout_account_number, payout_account_name, created_at
 FROM profiles
