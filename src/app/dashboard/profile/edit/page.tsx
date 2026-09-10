@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/lib/types';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { LocationSelect } from '@/components/ui/LocationSelect';
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -124,11 +125,12 @@ export default function EditProfilePage() {
             <PhoneInput value={phoneNumber} onChange={setPhoneNumber} required />
           </div>
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              {profile?.role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
-            </label>
-            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" required />
+            <LocationSelect
+              value={location}
+              onChange={setLocation}
+              label={profile?.role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
+              required
+            />
           </div>
 
           {profile?.role === 'farmer' && (

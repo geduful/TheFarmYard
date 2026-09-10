@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { uploadFile, LISTING_IMAGES_BUCKET } from '@/lib/supabase/storage';
 import type { Category, PriceUnit } from '@/lib/types';
+import { LocationSelect } from '@/components/ui/LocationSelect';
 
 const categories: Category[] = ['Crops & Grains', 'Livestock', 'Poultry', 'Aquaculture', 'Other'];
 const priceUnits: PriceUnit[] = ['kg', 'tonne', 'bag', 'crate', 'box', 'litre', 'unit', 'dozen', 'bunch', 'sack'];
@@ -153,11 +154,12 @@ export default function NewListingPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
-              <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., Accra, Kumasi"
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-green focus:border-transparent bg-white" />
+            <div className="col-span-2">
+              <LocationSelect
+                value={location}
+                onChange={setLocation}
+                label="Listing Location"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Availability</label>

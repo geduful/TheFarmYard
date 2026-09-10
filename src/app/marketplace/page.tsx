@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, Category, SortOption } from '@/lib/types';
 import { formatCurrency, formatPriceUnit, sortByOption } from '@/lib/utils';
+import { getRegionFromLocation } from '@/lib/locations';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 
 const PAGE_SIZE = 24;
@@ -125,7 +126,8 @@ export default function MarketplacePage() {
           .select('farm_location')
           .not('farm_location', 'is', null);
         if (!cancelled && locData) {
-          const unique = [...new Set(locData.map((p) => p.farm_location).filter(Boolean))] as string[];
+          const regions = locData.map((p) => getRegionFromLocation(p.farm_location)).filter(Boolean);
+          const unique = [...new Set(regions)] as string[];
           setLocations(unique);
         }
 
@@ -140,7 +142,7 @@ export default function MarketplacePage() {
           const { data: farmerProfiles } = await supabase
             .from('profiles')
             .select('id')
-            .eq('farm_location', selectedLocation);
+            .ilike('farm_location', `${selectedLocation}%`);
           const farmerIds = farmerProfiles?.map((p) => p.id) || [];
           if (farmerIds.length === 0) {
             setListings([]);

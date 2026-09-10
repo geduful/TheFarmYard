@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import type { Role } from '@/lib/types';
 import PhoneInput from '@/components/ui/PhoneInput';
+import { LocationSelect } from '@/components/ui/LocationSelect';
 
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -34,15 +35,6 @@ function BuyerIcon({ className }: { className?: string }) {
       <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M3 6h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function LocationIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="12" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -267,15 +259,12 @@ function SignupPageContent() {
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 focus:border-amber-500 transition-all shadow-sm" />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                        <LocationIcon className="w-3.5 h-3.5 text-gray-400" />
-                        {role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
-                      </label>
-                      <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
-                        placeholder="e.g., Eastern Region, Koforidua" required
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 focus:border-amber-500 transition-all shadow-sm" />
-                    </div>
+                    <LocationSelect
+                      value={location}
+                      onChange={setLocation}
+                      label={role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
+                      required
+                    />
 
                     {!fromFailedSignup && (
                       <div>
@@ -468,16 +457,12 @@ function SignupPageContent() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                    <LocationIcon className="w-3.5 h-3.5 text-gray-400" />
-                    {role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
-                  </label>
-                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g., Eastern Region, Koforidua"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-farm-green/30 focus:border-farm-green transition-all shadow-sm"
-                    required />
-                </div>
+                <LocationSelect
+                  value={location}
+                  onChange={setLocation}
+                  label={role === 'farmer' ? 'Farm Location' : 'Delivery Region'}
+                  required
+                />
 
                 <div className="flex items-start gap-3 py-1">
                   <input type="checkbox" id="agree-policies" required
