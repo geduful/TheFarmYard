@@ -717,11 +717,9 @@ export const NEWS_MARKET_REGIONS = [
 // ──────────────────────────────────────────────────────────────
 
 export type NotificationType =
-  // Marketplace
+  // Marketplace (includes buyer requests & matching)
   | 'listing_approved' | 'listing_rejected' | 'listing_promoted'
-  // Buyer Requests
   | 'buyer_request_created' | 'buyer_request_matched' | 'buyer_request_fulfilled' | 'buyer_request_cancelled'
-  // Matching
   | 'new_match' | 'improved_match'
   // Orders
   | 'order_created' | 'order_payment_received' | 'order_released' | 'order_disputed' | 'order_refunded'
@@ -735,17 +733,12 @@ export type NotificationType =
   | 'shipment_delivery_issue' | 'shipment_cancelled'
   // Storage
   | 'booking_created' | 'booking_confirmed' | 'booking_rejected' | 'booking_checked_in' | 'booking_checked_out'
-  // Market Intelligence
-  | 'price_alert' | 'market_opportunity'
-  // News
-  | 'important_news'
   // Platform
   | 'platform_announcement' | 'account_update';
 
 export type NotificationCategory =
-  | 'marketplace' | 'buyer_requests' | 'matching' | 'orders'
-  | 'verification' | 'reputation' | 'logistics' | 'storage'
-  | 'market_intelligence' | 'news' | 'learning' | 'platform';
+  | 'marketplace' | 'orders' | 'verification' | 'reputation'
+  | 'logistics' | 'storage' | 'platform';
 
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
 
@@ -771,34 +764,24 @@ export interface NotificationPreference {
   id: number;
   user_id: string;
   marketplace_enabled: boolean;
-  buyer_requests_enabled: boolean;
-  matching_enabled: boolean;
   orders_enabled: boolean;
   verification_enabled: boolean;
   reputation_enabled: boolean;
   logistics_enabled: boolean;
   storage_enabled: boolean;
-  market_intelligence_enabled: boolean;
-  news_enabled: boolean;
-  learning_enabled: boolean;
   platform_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export const NOTIFICATION_CATEGORY_CONFIG: Record<NotificationCategory, { label: string; color: string; dotColor: string }> = {
-  marketplace:         { label: 'Marketplace',         color: 'text-farm-green',    dotColor: 'bg-farm-green' },
-  buyer_requests:      { label: 'Buyer Requests',      color: 'text-blue-600',      dotColor: 'bg-blue-500' },
-  matching:            { label: 'Matching',            color: 'text-purple-600',    dotColor: 'bg-purple-500' },
-  orders:              { label: 'Orders',              color: 'text-amber-600',     dotColor: 'bg-amber-500' },
-  verification:        { label: 'Verification',        color: 'text-emerald-600',   dotColor: 'bg-emerald-500' },
-  reputation:          { label: 'Reputation',          color: 'text-yellow-600',    dotColor: 'bg-yellow-500' },
-  logistics:           { label: 'Logistics',           color: 'text-orange-600',    dotColor: 'bg-orange-500' },
-  storage:             { label: 'Storage',             color: 'text-cyan-600',      dotColor: 'bg-cyan-500' },
-  market_intelligence: { label: 'Market Intelligence', color: 'text-red-600',       dotColor: 'bg-red-500' },
-  news:                { label: 'News',                color: 'text-indigo-600',    dotColor: 'bg-indigo-500' },
-  learning:            { label: 'Learning',            color: 'text-teal-600',      dotColor: 'bg-teal-500' },
-  platform:            { label: 'Platform',            color: 'text-gray-600',      dotColor: 'bg-gray-500' },
+export const NOTIFICATION_CATEGORY_CONFIG: Record<NotificationCategory, { label: string; description: string; color: string; dotColor: string }> = {
+  marketplace:  { label: 'Marketplace',  description: 'Listing updates, buyer requests, and matches', color: 'text-farm-green',  dotColor: 'bg-farm-green' },
+  orders:       { label: 'Orders',       description: 'Payments, escrow, and purchase updates',     color: 'text-amber-600',   dotColor: 'bg-amber-500' },
+  verification: { label: 'Verification', description: 'Account verification and tier changes',       color: 'text-emerald-600', dotColor: 'bg-emerald-500' },
+  reputation:   { label: 'Reputation',   description: 'Ratings and trust score changes',             color: 'text-yellow-600',  dotColor: 'bg-yellow-500' },
+  logistics:    { label: 'Logistics',    description: 'Shipping and delivery updates',               color: 'text-orange-600',  dotColor: 'bg-orange-500' },
+  storage:      { label: 'Storage',      description: 'Warehousing booking updates',                 color: 'text-cyan-600',    dotColor: 'bg-cyan-500' },
+  platform:     { label: 'Platform',     description: 'Critical system updates (always enabled)',    color: 'text-gray-600',    dotColor: 'bg-gray-500' },
 };
 
 export const NOTIFICATION_PRIORITY_CONFIG: Record<NotificationPriority, { label: string; color: string; bgColor: string }> = {

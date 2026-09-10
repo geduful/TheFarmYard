@@ -18,8 +18,8 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 const categories: NotificationCategory[] = [
-  'marketplace', 'buyer_requests', 'matching', 'orders', 'verification',
-  'reputation', 'logistics', 'storage', 'market_intelligence', 'news', 'learning', 'platform',
+  'marketplace', 'orders', 'verification',
+  'reputation', 'logistics', 'storage', 'platform',
 ];
 
 export default function NotificationsPage() {

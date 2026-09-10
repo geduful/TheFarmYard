@@ -7,16 +7,11 @@ import { NOTIFICATION_CATEGORY_CONFIG } from '@/lib/types';
 
 const categoryFields: { key: NotificationCategory; field: keyof NotificationPreference }[] = [
   { key: 'marketplace', field: 'marketplace_enabled' },
-  { key: 'buyer_requests', field: 'buyer_requests_enabled' },
-  { key: 'matching', field: 'matching_enabled' },
   { key: 'orders', field: 'orders_enabled' },
   { key: 'verification', field: 'verification_enabled' },
   { key: 'reputation', field: 'reputation_enabled' },
   { key: 'logistics', field: 'logistics_enabled' },
   { key: 'storage', field: 'storage_enabled' },
-  { key: 'market_intelligence', field: 'market_intelligence_enabled' },
-  { key: 'news', field: 'news_enabled' },
-  { key: 'learning', field: 'learning_enabled' },
   { key: 'platform', field: 'platform_enabled' },
 ];
 
@@ -113,9 +108,7 @@ export default function NotificationPreferencesPage() {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">{config.label}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {key === 'platform' ? 'Critical platform updates (always enabled)' : `Receive ${config.label.toLowerCase()} notifications`}
-                  </p>
+                  <p className="text-xs text-gray-400 truncate">{config.description}</p>
                 </div>
               </div>
               <button

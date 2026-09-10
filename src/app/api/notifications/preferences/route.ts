@@ -47,10 +47,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const allowedFields = [
-      'marketplace_enabled', 'buyer_requests_enabled', 'matching_enabled',
+      'marketplace_enabled',
       'orders_enabled', 'verification_enabled', 'reputation_enabled',
-      'logistics_enabled', 'storage_enabled', 'market_intelligence_enabled',
-      'news_enabled', 'learning_enabled', 'platform_enabled',
+      'logistics_enabled', 'storage_enabled', 'platform_enabled',
     ];
 
     const updates: Record<string, boolean> = {};

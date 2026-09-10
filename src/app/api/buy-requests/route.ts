@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         createNotification({
           userId: listing.farmer_id,
           type: 'buyer_request_matched',
-          category: 'buyer_requests',
+          category: 'marketplace',
           title: 'New Buyer Request Match',
           message: `A buyer is looking for "${commodity_title}" in ${delivery_location}. Your listing "${listing.title}" is a strong match (${reasons}).`,
           priority: 'high',
