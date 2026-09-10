@@ -191,10 +191,20 @@ export default function MarketplacePage() {
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             {profile?.role === 'farmer' && (
-              <button onClick={() => router.push('/dashboard/farmer')} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition">Dashboard</button>
+              <button onClick={() => router.push('/dashboard/farmer')} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-farm-green bg-farm-green/5 hover:bg-farm-green/10 rounded-xl transition border border-farm-green/20">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                </svg>
+                Dashboard
+              </button>
             )}
             {profile?.role === 'buyer' && (
-              <button onClick={() => router.push('/dashboard/buyer')} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition">My Orders</button>
+              <button onClick={() => router.push('/dashboard/buyer')} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-farm-green bg-farm-green/5 hover:bg-farm-green/10 rounded-xl transition border border-farm-green/20">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                My Orders
+              </button>
             )}
             {profile?.role === 'admin' && (
               <button onClick={() => router.push('/dashboard/admin')} className="px-4 py-2 text-sm font-semibold text-farm-green bg-farm-green/5 hover:bg-farm-green/10 rounded-xl transition flex items-center gap-1.5">

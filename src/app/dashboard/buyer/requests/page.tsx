@@ -46,7 +46,7 @@ function BuyerRequestsContent() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
       if (!p) { setLoading(false); return; }
       if (p.role !== 'buyer') { router.push('/marketplace'); return; }
       setProfile(p);
@@ -73,37 +73,30 @@ function BuyerRequestsContent() {
     setFormError('');
     setFormLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.from('buy_requests').insert({
-      buyer_id: profile.id,
-      commodity_title: form.commodity_title.trim(),
-      category: form.category,
-      quantity_required: form.quantity_required.trim(),
-      price_unit: form.price_unit,
-      max_price_per_unit: form.max_price_per_unit ? parseFloat(form.max_price_per_unit) : null,
-      delivery_location: form.delivery_location.trim(),
-      deadline: form.deadline,
-      additional_notes: form.additional_notes.trim() || null,
-      status: 'open',
-    });
+    try {
+      const res = await fetch('/api/buy-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
 
-    if (error) { setFormError(error.message); setFormLoading(false); return; }
+      if (!res.ok) {
+        setFormError(data.error || 'Failed to create request.');
+        setFormLoading(false);
+        return;
+      }
 
-    const { data: newRequest } = await supabase
-      .from('buy_requests')
-      .select('*')
-      .eq('buyer_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (newRequest) setRequests((prev) => [newRequest as BuyRequest, ...prev]);
-    setFormSuccess(true);
-    setTimeout(() => {
-      setShowCreate(false);
-      setFormSuccess(false);
-      setForm({ commodity_title: '', category: 'Crops & Grains', quantity_required: '', price_unit: 'kg', max_price_per_unit: '', delivery_location: '', deadline: '', additional_notes: '' });
-    }, 1500);
+      if (data.request) setRequests((prev) => [data.request as BuyRequest, ...prev]);
+      setFormSuccess(true);
+      setTimeout(() => {
+        setShowCreate(false);
+        setFormSuccess(false);
+        setForm({ commodity_title: '', category: 'Crops & Grains', quantity_required: '', price_unit: 'kg', max_price_per_unit: '', delivery_location: '', deadline: '', additional_notes: '' });
+      }, 1500);
+    } catch {
+      setFormError('Network error. Please try again.');
+    }
     setFormLoading(false);
   }
 
@@ -122,6 +115,12 @@ function BuyerRequestsContent() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto animate-fade-in">
+      <Link href="/dashboard/buyer" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-farm-green transition mb-4 group">
+        <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to My Orders
+      </Link>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">

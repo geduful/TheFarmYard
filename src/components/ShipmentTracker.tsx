@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import type { Shipment, ShipmentStatus, ShipmentStatusHistory } from '@/lib/types';
 import { SHIPMENT_STATUS_CONFIG, SHIPMENT_STATUS_FLOW } from '@/lib/types';
 import { getShipmentProgress, formatShipmentTimestamp, getEstimatedArrival } from '@/lib/utils';
@@ -19,7 +18,6 @@ export default function ShipmentTracker({ shipment, history, userRole, onStatusU
   const [error, setError] = useState('');
   const currentStepIndex = SHIPMENT_STATUS_FLOW.indexOf(shipment.status);
   const progress = getShipmentProgress(shipment.status);
-  const supabase = createClient();
 
   const availableTransitions = getAvailableTransitions(shipment.status, userRole);
 
@@ -49,41 +47,15 @@ export default function ShipmentTracker({ shipment, history, userRole, onStatusU
     setError('');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({ status: newStatus })
-        .eq('id', shipment.id);
-
-      if (updateError) throw new Error(updateError.message);
-
-      const { error: historyError } = await supabase
-        .from('shipment_status_history')
-        .insert({
-          shipment_id: shipment.id,
-          from_status: shipment.status,
-          to_status: newStatus,
-          changed_by: user.id,
-        });
-
-      if (historyError) console.error('History insert error:', historyError);
-
-      if (newStatus === 'delivered') {
-        await supabase
-          .from('shipments')
-          .update({ actual_delivery_at: new Date().toISOString() })
-          .eq('id', shipment.id);
+      const res = await fetch('/api/shipments/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentId: shipment.id, newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update status');
       }
-
-      if (newStatus === 'in_transit') {
-        await supabase
-          .from('shipments')
-          .update({ actual_pickup_at: new Date().toISOString() })
-          .eq('id', shipment.id);
-      }
-
       onStatusUpdate?.(newStatus);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update status');

@@ -27,14 +27,24 @@ export default function EditProfilePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
       setProfile(p);
       setFullName(p?.full_name || '');
       setPhoneNumber(p?.phone_number || '');
       setLocation(p?.farm_location || '');
-      setPayoutBank(p?.payout_account_bank || '');
-      setPayoutNumber(p?.payout_account_number || '');
-      setPayoutName(p?.payout_account_name || '');
+
+      // Fetch payout details from secure API (farmers only)
+      if (p?.role === 'farmer') {
+        try {
+          const res = await fetch('/api/payout-details');
+          const data = await res.json();
+          if (data.payoutDetails) {
+            setPayoutBank(data.payoutDetails.bank_name || '');
+            setPayoutNumber(data.payoutDetails.account_number || '');
+            setPayoutName(data.payoutDetails.account_name || '');
+          }
+        } catch { /* payout details not yet set */ }
+      }
       setLoading(false);
     }
     load();
@@ -51,11 +61,24 @@ export default function EditProfilePage() {
       full_name: fullName,
       phone_number: phoneNumber,
       farm_location: location,
-      payout_account_bank: payoutBank.trim() || null,
-      payout_account_number: payoutNumber.trim() || null,
-      payout_account_name: payoutName.trim() || null,
     }).eq('id', profile?.id);
     if (updateError) { setError(updateError.message); setSaving(false); return; }
+
+    // Save payout details via secure API (farmers only)
+    if (profile.role === 'farmer') {
+      try {
+        await fetch('/api/payout-details', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bank_name: payoutBank.trim() || null,
+            account_number: payoutNumber.trim() || null,
+            account_name: payoutName.trim() || null,
+          }),
+        });
+      } catch { /* payout save failed silently — profile still saved */ }
+    }
+
     setSuccess(true);
     setSaving(false);
     setTimeout(() => router.push('/dashboard/profile'), 1500);

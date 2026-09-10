@@ -29,18 +29,18 @@ export default function FarmerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) { router.push('/login'); return; }
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
       if (cancelled || !p) { setLoading(false); return; }
       setProfile(p);
       if (p.role !== 'farmer') { router.push('/marketplace'); return; }
 
       // Parallelize all independent queries
       const [listingsRes, transactionsRes, ratingsRes, requestsRes, shipmentsRes] = await Promise.all([
-        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('farmer_ratings').select('*, buyer:profiles!farmer_ratings_buyer_id_fkey(full_name)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('shipments').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('escrow_transactions').select('*, listing:listings(*)').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('farmer_ratings').select('*, buyer:profiles!farmer_ratings_buyer_id_fkey(full_name)').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('buy_requests').select('*').eq('status', 'open').order('created_at', { ascending: false }).limit(100),
+        supabase.from('shipments').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(200),
       ]);
 
       if (cancelled) return;
@@ -156,34 +156,43 @@ export default function FarmerDashboard() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2">
-          <button onClick={() => setActiveTab('listings')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'listings' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            My Listings
-            {listings.length > 0 && <span className="ml-1.5 text-xs opacity-70">({listings.length})</span>}
-          </button>
-          <button onClick={() => setActiveTab('shipments')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            Shipments
-            {shipments.length > 0 && <span className="ml-1.5 text-xs opacity-70">({shipments.length})</span>}
-          </button>
-          <button onClick={() => setActiveTab('requests')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            Buyer Requests
-            {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
-          </button>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex gap-1 overflow-x-auto">
+          {[
+            { tab: 'listings' as const, label: 'My Listings', count: listings.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /></svg> },
+            { tab: 'shipments' as const, label: 'Shipments', count: shipments.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> },
+            { tab: 'requests' as const, label: 'Buyer Requests', count: buyerRequests.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg> },
+          ].map((item) => (
+            <button key={item.tab} onClick={() => setActiveTab(item.tab)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === item.tab
+                  ? 'bg-farm-green text-white shadow-md shadow-farm-green/20'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+              }`}>
+              {item.icon}
+              {item.label}
+              {item.count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === item.tab ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        {activeTab === 'listings' && (
-          <Link href="/dashboard/farmer/listings/new" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
-            + New Listing
-          </Link>
-        )}
-        {activeTab === 'requests' && (
-          <Link href="/dashboard/farmer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
-            View All Requests
-          </Link>
-        )}
+        <div className="flex gap-2 shrink-0">
+          {activeTab === 'listings' && (
+            <Link href="/dashboard/farmer/listings/new" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md whitespace-nowrap active:scale-[0.98]">
+              + New Listing
+            </Link>
+          )}
+          {activeTab === 'requests' && (
+            <Link href="/dashboard/farmer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md whitespace-nowrap active:scale-[0.98]">
+              View All Requests
+            </Link>
+          )}
+        </div>
       </div>
 
       {activeTab === 'requests' && (

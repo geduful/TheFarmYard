@@ -25,7 +25,7 @@ export default function FarmerRequestsPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
       if (!p) { setLoading(false); return; }
       if (p.role !== 'farmer') { router.push('/marketplace'); return; }
       setProfile(p);

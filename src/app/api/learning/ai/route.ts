@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceSupabaseClient } from '@/lib/supabase/service';
 import { stripHtml } from '@/lib/utils';
 
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
 const OLLAMA_BASE_URL = 'https://ollama.com/api';
+
+const AI_RATE_LIMIT_MAX = 30; // requests per hour
+const AI_RATE_LIMIT_WINDOW = 60; // minutes
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -284,6 +289,26 @@ When relevant, naturally suggest these features.`;
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in to use the AI assistant.' }, { status: 401 });
+    }
+
+    // Rate limit check
+    const serviceClient = createServiceSupabaseClient();
+    const { data: rateOk } = await serviceClient
+      .rpc('check_ai_rate_limit', {
+        p_user_id: user.id,
+        p_endpoint: 'learning_ai',
+        p_max_requests: AI_RATE_LIMIT_MAX,
+        p_window_minutes: AI_RATE_LIMIT_WINDOW,
+      });
+    if (rateOk === false) {
+      return NextResponse.json({ error: 'Rate limit exceeded. Please try again later.' }, { status: 429 });
+    }
+
     const { message, history } = await request.json();
 
     if (!message || typeof message !== 'string') {
@@ -294,6 +319,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is too long. Please keep it under 2000 characters.' }, { status: 400 });
     }
 
+    // Validate and sanitize history
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter((msg: unknown) => msg && typeof msg === 'object' && 'role' in msg && 'content' in msg)
+          .slice(-6)
+          .map((msg: { role: unknown; content: unknown }) => ({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: typeof msg.content === 'string' ? msg.content.slice(0, 2000) : '',
+          }))
+      : [];
+
     // Search knowledge base
     const kbResources = await searchKnowledgeBase(message, 8);
 
@@ -303,7 +339,7 @@ export async function POST(request: NextRequest) {
     // Try Ollama Cloud if API key is available
     if (OLLAMA_API_KEY) {
       try {
-        answer = await generateWithOllama(message, kbResources, history || []);
+        answer = await generateWithOllama(message, kbResources, safeHistory);
         poweredBy = 'ai';
       } catch (error) {
         console.error('Ollama failed, falling back to KB assistant:', error);
@@ -324,6 +360,9 @@ export async function POST(request: NextRequest) {
 
     // Detect feature suggestions
     const featureSuggestions = detectFeatureSuggestions(answer, message);
+
+    // Record usage for rate limiting (fire-and-forget)
+    void serviceClient.rpc('record_ai_usage', { p_user_id: user.id, p_endpoint: 'learning_ai' });
 
     return NextResponse.json({
       answer,

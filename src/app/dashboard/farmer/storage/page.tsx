@@ -39,8 +39,8 @@ export default function FarmerStoragePage() {
       if (!user) { router.push('/login'); return; }
 
       const [facilitiesRes, bookingsRes] = await Promise.all([
-        supabase.from('storage_facilities').select('*').eq('is_approved', true).eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit)').eq('farmer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('storage_facilities').select('*').eq('is_approved', true).eq('status', 'active').order('created_at', { ascending: false }).limit(200),
+        supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit)').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(200),
       ]);
 
       setFacilities(facilitiesRes.data || []);
@@ -89,6 +89,23 @@ export default function FarmerStoragePage() {
 
     setBookingSuccess(true);
     setBookingLoading(false);
+
+    // Notify admin of new booking
+    fetch('/api/notifications/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.id,
+        type: 'booking_created',
+        category: 'storage',
+        title: 'Storage Booking Submitted',
+        message: `Your booking request for ${bookingFacility.name} has been submitted.`,
+        priority: 'normal',
+        actionUrl: '/dashboard/farmer/storage',
+        entityType: 'storage_booking',
+        entityId: bookingFacility.id,
+      }),
+    });
 
     // Refresh bookings
     const { data: updatedBookings } = await supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit)').eq('farmer_id', user.id).order('created_at', { ascending: false });

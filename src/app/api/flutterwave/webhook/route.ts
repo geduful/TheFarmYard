@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase/service';
 import { verifyTransaction, isPaymentsConfigured } from '@/lib/flutterwave';
 import { confirmEscrowPayment } from '@/lib/escrowConfirm';
+import { timingSafeEqual } from 'crypto';
 
 /**
- * GET /api/flutterwave/webhook — Flutterwave server callback (source of truth).
+ * POST /api/flutterwave/webhook — Flutterwave server callback (source of truth).
  * Verify with the `verif-hash` header = FLW_WEBHOOK_HASH from your dashboard.
  */
 export async function POST(request: NextRequest) {
@@ -13,7 +14,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhooks not configured.' }, { status: 503 });
   }
   const receivedHash = request.headers.get('verif-hash');
-  if (receivedHash !== expectedHash) {
+  if (!receivedHash) {
+    return NextResponse.json({ error: 'Invalid signature.' }, { status: 401 });
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  const expectedBuf = Buffer.from(expectedHash, 'utf8');
+  const receivedBuf = Buffer.from(receivedHash, 'utf8');
+  if (expectedBuf.length !== receivedBuf.length || !timingSafeEqual(expectedBuf, receivedBuf)) {
     return NextResponse.json({ error: 'Invalid signature.' }, { status: 401 });
   }
 

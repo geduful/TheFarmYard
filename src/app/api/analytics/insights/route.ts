@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceSupabaseClient } from '@/lib/supabase/service';
 
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
 const OLLAMA_BASE_URL = 'https://ollama.com/api';
+
+const AI_RATE_LIMIT_MAX = 20; // requests per hour
+const AI_RATE_LIMIT_WINDOW = 60; // minutes
 
 function buildInsightPrompt(role: string, analyticsData: Record<string, unknown>, question?: string): string {
   const dataSummary = JSON.stringify(analyticsData, null, 2).slice(0, 3000);
@@ -157,6 +162,26 @@ function generateFallbackInsights(
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+    }
+
+    // Rate limit check
+    const serviceClient = createServiceSupabaseClient();
+    const { data: rateOk } = await serviceClient
+      .rpc('check_ai_rate_limit', {
+        p_user_id: user.id,
+        p_endpoint: 'analytics_insights',
+        p_max_requests: AI_RATE_LIMIT_MAX,
+        p_window_minutes: AI_RATE_LIMIT_WINDOW,
+      });
+    if (rateOk === false) {
+      return NextResponse.json({ error: 'Rate limit exceeded. Please try again later.' }, { status: 429 });
+    }
+
     const { role, analyticsData, question } = await request.json();
 
     if (!role || !['farmer', 'buyer', 'admin'].includes(role)) {
@@ -167,7 +192,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Analytics data is required.' }, { status: 400 });
     }
 
-    const insights = await generateInsights(role, analyticsData, question);
+    // Validate question length if provided
+    const sanitizedQuestion = question && typeof question === 'string' ? question.slice(0, 500) : undefined;
+
+    const insights = await generateInsights(role, analyticsData, sanitizedQuestion);
+
+    // Record usage for rate limiting (fire-and-forget)
+    void serviceClient.rpc('record_ai_usage', { p_user_id: user.id, p_endpoint: 'analytics_insights' });
 
     return NextResponse.json({ insights, poweredBy: OLLAMA_API_KEY ? 'ai' : 'fallback' });
   } catch (error) {

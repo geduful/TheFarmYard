@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { sanitizeHtml } from '@/lib/utils';
 
 interface Article {
   id: number;
@@ -213,7 +214,7 @@ export default function ArticleDetailPage() {
             {article.content && (
               <div
                 className="prose prose-lg max-w-none prose-headings:text-farm-green prose-a:text-farm-green"
-                dangerouslySetInnerHTML={{ __html: article.content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content) }}
               />
             )}
 

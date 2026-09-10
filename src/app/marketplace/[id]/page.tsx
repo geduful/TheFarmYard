@@ -31,7 +31,7 @@ export default function ListingDetailPage() {
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!cancelled && user) {
-          const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+          const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
           if (!cancelled) setProfile(p);
         }
 

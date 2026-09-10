@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase/service';
 import { initiateTransfer, isPaymentsConfigured } from '@/lib/flutterwave';
 import { sendSms } from '@/lib/sms';
+import { createNotification } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
-const RELEASE_WINDOW_MS = 48 * 60 * 60 * 1000; // max 48h per platform policy
-const PENDING_TTL_MS = 24 * 60 * 60 * 1000; // drop unpaid checkouts after 24h
+const RELEASE_WINDOW_MS = 48 * 60 * 60 * 1000;
+const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const BATCH = 50;
 
 /**
@@ -32,6 +33,21 @@ export async function GET(request: NextRequest) {
     .eq('status', 'dispatched')
     .limit(BATCH);
 
+  // Batch-fetch all user phone numbers upfront (eliminates N+1)
+  const allUserIds = [...new Set((due ?? []).flatMap(tx => [tx.buyer_id, tx.farmer_id]))];
+  const phoneMap = new Map<string, string>();
+  if (allUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, phone_number')
+      .in('id', allUserIds);
+    if (profiles) {
+      for (const p of profiles) {
+        if (p.phone_number) phoneMap.set(p.id, p.phone_number);
+      }
+    }
+  }
+
   for (const tx of due ?? []) {
     const deadline = tx.auto_release_at
       ? new Date(tx.auto_release_at)
@@ -46,21 +62,19 @@ export async function GET(request: NextRequest) {
     if (error) continue;
     released += 1;
 
-    // Attempt farmer payout when details + gateway exist; otherwise the
-    // release stands in-ledger and admin settles manually (payout_reference null).
     if (isPaymentsConfigured() && !tx.payout_reference) {
-      const { data: farmer } = await supabase
-        .from('profiles')
-        .select('phone_number, payout_account_bank, payout_account_number')
-        .eq('id', tx.farmer_id)
+      const { data: payout } = await supabase
+        .from('payout_details')
+        .select('bank_name, account_number')
+        .eq('user_id', tx.farmer_id)
         .single();
-      if (farmer?.payout_account_bank && farmer?.payout_account_number) {
+      if (payout?.bank_name && payout?.account_number) {
         try {
           const { reference } = await initiateTransfer({
             amount: Number(tx.total_farmer_yield),
             currency: tx.currency || 'GHS',
-            accountBank: farmer.payout_account_bank,
-            accountNumber: farmer.payout_account_number,
+            accountBank: payout.bank_name,
+            accountNumber: payout.account_number,
             reference: `tfy-payout-${tx.id}-${Date.now()}`,
             narration: `TheFarmYard payout #${tx.id}`,
           });
@@ -75,15 +89,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const [{ data: buyer }, { data: farmer }] = await Promise.all([
-      supabase.from('profiles').select('phone_number').eq('id', tx.buyer_id).single(),
-      supabase.from('profiles').select('phone_number').eq('id', tx.farmer_id).single(),
-    ]);
-    await sendSms(buyer?.phone_number, `TheFarmYard: order #${tx.id} auto-released after the delivery window.`);
-    await sendSms(farmer?.phone_number, `TheFarmYard: funds for order #${tx.id} released to your payout account.`);
+    const buyerPhone = phoneMap.get(tx.buyer_id);
+    const farmerPhone = phoneMap.get(tx.farmer_id);
+    if (buyerPhone) await sendSms(buyerPhone, `TheFarmYard: order #${tx.id} auto-released after the delivery window.`);
+    if (farmerPhone) await sendSms(farmerPhone, `TheFarmYard: funds for order #${tx.id} released to your payout account.`);
+
+    createNotification({
+      userId: tx.buyer_id,
+      type: 'order_released',
+      category: 'orders',
+      title: 'Order Auto-Released',
+      message: `Order #${tx.id} has been auto-released after the delivery inspection window.`,
+      priority: 'high',
+      actionUrl: `/dashboard/buyer`,
+      entityType: 'escrow',
+      entityId: String(tx.id),
+    });
+    createNotification({
+      userId: tx.farmer_id,
+      type: 'order_released',
+      category: 'orders',
+      title: 'Funds Released',
+      message: `Funds for order #${tx.id} have been released to your payout account.`,
+      priority: 'high',
+      actionUrl: `/dashboard/farmer`,
+      entityType: 'escrow',
+      entityId: String(tx.id),
+    });
   }
 
-  // Sweep unpaid demo/gateway checkouts older than 24h.
   const { data: stale } = await supabase
     .from('escrow_transactions')
     .select('id')

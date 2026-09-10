@@ -65,7 +65,7 @@ function BuyerDashboardContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) { router.push('/login'); return; }
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: p } = await supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').eq('id', user.id).single();
       if (cancelled || !p) { setLoading(false); return; }
       if (p.role === 'farmer') { router.push('/marketplace'); return; }
       setProfile(p);
@@ -84,10 +84,10 @@ function BuyerDashboardContent() {
 
       // Parallelize all independent queries
       const [txRes, brRes, sRes, ratingsRes] = await Promise.all([
-        supabase.from('escrow_transactions').select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').eq('buyer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('buy_requests').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('shipments').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id),
+        supabase.from('escrow_transactions').select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)').eq('buyer_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('buy_requests').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('shipments').select('*').eq('buyer_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('farmer_ratings').select('transaction_id').eq('buyer_id', user.id).limit(200),
       ]);
 
       if (cancelled) return;
@@ -201,6 +201,23 @@ function BuyerDashboardContent() {
     setRatingSubmitting(false);
     setShowRatingModal(false);
     setRatingStars(0); setRatingComment(''); setRatingTx(null);
+
+    // Notify farmer of new rating
+    fetch('/api/notifications/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: ratingTx.farmer_id,
+        type: 'new_rating',
+        category: 'reputation',
+        title: 'New Rating Received',
+        message: `You received a ${ratingStars}-star rating from a buyer.`,
+        priority: 'normal',
+        actionUrl: '/dashboard/farmer/analytics',
+        entityType: 'farmer_rating',
+        entityId: ratingTx.id,
+      }),
+    });
   }
 
   if (loading) return <div className="p-6"><TableSkeleton rows={4} cols={3} /></div>;
@@ -263,7 +280,7 @@ function BuyerDashboardContent() {
                   {checkoutLoading ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</span> : `Pay ${formatCurrency(fees.totalBuyerPaid)}`}
                 </button>
                 <button type="button" onClick={() => { setShowCheckout(false); router.push('/dashboard/buyer'); }}
-                  className="px-4 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-300 hover:bg-gray-50 transition">
+                  className="px-4 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-300 hover:bg-gray-50 transition active:scale-[0.98] shadow-sm">
                   Cancel
                 </button>
               </div>
@@ -300,7 +317,7 @@ function BuyerDashboardContent() {
             </div>
           </div>
           <button onClick={handleDismissWarning}
-            className="text-amber-500 hover:text-amber-700 transition shrink-0 mt-0.5"
+            className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded-lg transition shrink-0 mt-0.5"
             aria-label="Dismiss warning">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}>
               <path d="M6 18L18 6M6 6l12 12" />
@@ -312,47 +329,54 @@ function BuyerDashboardContent() {
       {searchParams.get('payment') === 'success' && (
         <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
           <span><strong>Payment confirmed.</strong> Your funds are now held securely in escrow.</span>
-          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 rounded-lg transition font-bold" aria-label="Dismiss">✕</button>
         </div>
       )}
       {(searchParams.get('payment') === 'failed' || searchParams.get('payment') === 'error') && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
           <span><strong>Payment not completed.</strong> No money left your account — please try again.</span>
-          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition font-bold" aria-label="Dismiss">✕</button>
         </div>
       )}
       {searchParams.get('payment') === 'cancelled' && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-2xl flex items-center justify-between gap-2 animate-fade-in">
           <span>Payment was cancelled. Your order was not created.</span>
-          <button onClick={() => router.replace('/dashboard/buyer')} className="font-bold hover:opacity-70" aria-label="Dismiss">✕</button>
+          <button onClick={() => router.replace('/dashboard/buyer')} className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition font-bold" aria-label="Dismiss">✕</button>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2">
-          <button onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'orders' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            My Orders
-            {transactions.length > 0 && <span className="ml-1.5 text-xs opacity-70">({transactions.length})</span>}
-          </button>
-          <button onClick={() => setActiveTab('shipments')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'shipments' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            Shipments
-            {shipments.length > 0 && <span className="ml-1.5 text-xs opacity-70">({shipments.length})</span>}
-          </button>
-          <button onClick={() => setActiveTab('requests')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'requests' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            My Requests
-            {buyerRequests.length > 0 && <span className="ml-1.5 text-xs opacity-70">({buyerRequests.length})</span>}
-          </button>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex gap-1 overflow-x-auto">
+          {[
+            { tab: 'orders' as const, label: 'My Orders', count: transactions.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> },
+            { tab: 'shipments' as const, label: 'Shipments', count: shipments.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> },
+            { tab: 'requests' as const, label: 'My Requests', count: buyerRequests.length, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg> },
+          ].map((item) => (
+            <button key={item.tab} onClick={() => setActiveTab(item.tab)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === item.tab
+                  ? 'bg-farm-green text-white shadow-md shadow-farm-green/20'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+              }`}>
+              {item.icon}
+              {item.label}
+              {item.count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === item.tab ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2 shrink-0">
           <button onClick={() => { setReportTx(null); setReportCategory('other'); setReportSubject(''); setReportDescription(''); setReportError(''); setReportSuccess(false); setShowReportModal(true); }}
-            className="px-4 py-2 bg-white text-alert-red text-sm font-semibold rounded-xl border border-red-200 hover:bg-red-50 transition shadow-sm flex items-center gap-2">
+            className="px-4 py-2 bg-white text-alert-red text-sm font-semibold rounded-xl border border-red-200 hover:bg-red-50 transition shadow-sm flex items-center gap-2 whitespace-nowrap active:scale-[0.98]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-            Report to Admin
+            Report
           </button>
-          <Link href="/marketplace" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md">
+          <Link href="/marketplace" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm hover:shadow-md whitespace-nowrap active:scale-[0.98]">
             Browse Marketplace
           </Link>
         </div>
@@ -365,7 +389,7 @@ function BuyerDashboardContent() {
               <span className="w-1.5 h-5 rounded-full bg-farm-green" />
               Buyer Requests
             </h3>
-            <Link href="/dashboard/buyer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+            <Link href="/dashboard/buyer/requests" className="px-4 py-2 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm active:scale-[0.98]">
               + New Request
             </Link>
           </div>
@@ -373,7 +397,7 @@ function BuyerDashboardContent() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12 animate-fade-in">
               <p className="text-gray-500 font-medium mb-1">No requests yet</p>
               <p className="text-gray-400 text-sm mb-4">Post a buyer request to tell farmers what you need.</p>
-              <Link href="/dashboard/buyer/requests" className="inline-flex px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+              <Link href="/dashboard/buyer/requests" className="inline-flex px-5 py-2.5 bg-farm-green text-white text-sm font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm active:scale-[0.98]">
                 Create Request
               </Link>
             </div>
@@ -468,7 +492,7 @@ function BuyerDashboardContent() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-20 animate-fade-in">
           <h3 className="text-lg font-semibold text-gray-900 mb-1">No orders yet</h3>
           <p className="text-gray-500 text-sm mb-5">Browse the marketplace to find what you need.</p>
-          <Link href="/marketplace" className="inline-flex px-5 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm">
+          <Link href="/marketplace" className="inline-flex px-5 py-2.5 bg-farm-green text-white font-semibold rounded-xl hover:bg-farm-green-light transition shadow-sm active:scale-[0.98]">
             Browse Marketplace
           </Link>
         </div>
@@ -500,7 +524,7 @@ function BuyerDashboardContent() {
                       </span>
                     )}
                     <button onClick={() => { setReportTx(tx); setReportCategory('other'); setReportSubject(''); setReportDescription(''); setReportError(''); setReportSuccess(false); setShowReportModal(true); }}
-                      className="px-3 py-1.5 bg-white text-alert-red text-xs font-semibold rounded-lg border border-red-200 hover:bg-red-50 transition shadow-sm flex items-center gap-1.5">
+                      className="px-3 py-1.5 bg-white text-alert-red text-xs font-semibold rounded-lg border border-red-200 hover:bg-red-50 transition shadow-sm flex items-center gap-1.5 active:scale-[0.98]">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                       Report
                     </button>
@@ -633,7 +657,7 @@ function BuyerDashboardContent() {
                     {reportSubmitting ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Submitting...</span> : 'Submit Report'}
                   </button>
                   <button type="button" onClick={() => setShowReportModal(false)}
-                    className="px-5 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition text-sm">
+                    className="px-5 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition text-sm active:scale-[0.98] shadow-sm">
                     Cancel
                   </button>
                 </div>
@@ -697,7 +721,7 @@ function BuyerDashboardContent() {
                   {ratingSubmitting ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Submitting...</span> : 'Submit Rating'}
                 </button>
                 <button type="button" onClick={() => setShowRatingModal(false)}
-                  className="px-5 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition text-sm">
+                  className="px-5 py-2.5 text-gray-600 font-medium rounded-xl border border-gray-200 hover:bg-gray-50 transition text-sm active:scale-[0.98] shadow-sm">
                   Cancel
                 </button>
               </div>

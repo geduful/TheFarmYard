@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceSupabaseClient } from '@/lib/supabase/service';
 
 const OLLAMA_API_URL = 'https://ollama.com/api/chat';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
+
+const AI_RATE_LIMIT_MAX = 15; // requests per hour
+const AI_RATE_LIMIT_WINDOW = 60; // minutes
 
 function getSupabase() {
   return createClient(
@@ -14,11 +19,38 @@ function getSupabase() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const authSupabase = await createServerSupabaseClient();
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in.' }, { status: 401 });
+    }
+
+    // Rate limit check
+    const serviceClient = createServiceSupabaseClient();
+    const { data: rateOk } = await serviceClient
+      .rpc('check_ai_rate_limit', {
+        p_user_id: user.id,
+        p_endpoint: 'news_summarize',
+        p_max_requests: AI_RATE_LIMIT_MAX,
+        p_window_minutes: AI_RATE_LIMIT_WINDOW,
+      });
+    if (rateOk === false) {
+      return NextResponse.json({ error: 'Rate limit exceeded. Please try again later.' }, { status: 429 });
+    }
+
     const { articleId, articleTitle, articleContent, articleSummary, sourceName, mode } = await request.json();
 
-    if (!articleTitle) {
+    if (!articleTitle || typeof articleTitle !== 'string') {
       return NextResponse.json({ error: 'Article title is required.' }, { status: 400 });
     }
+
+    // Validate and sanitize inputs
+    const safeTitle = articleTitle.slice(0, 500);
+    const safeContent = articleContent && typeof articleContent === 'string' ? articleContent.slice(0, 3000) : '';
+    const safeSummary = articleSummary && typeof articleSummary === 'string' ? articleSummary.slice(0, 1000) : '';
+    const safeSource = sourceName && typeof sourceName === 'string' ? sourceName.slice(0, 200) : '';
+    const safeMode = mode === 'explain' ? 'explain' : 'summarize';
 
     const supabase = getSupabase();
 
@@ -33,10 +65,10 @@ export async function POST(request: NextRequest) {
       article = data;
     }
 
-    const title = article?.title || articleTitle;
-    const summary = article?.summary || articleSummary || '';
-    const content = article?.content || articleContent || '';
-    const source = article?.source_name || sourceName || 'Unknown source';
+    const title = article?.title || safeTitle;
+    const summary = article?.summary || safeSummary;
+    const content = article?.content || safeContent;
+    const source = article?.source_name || safeSource || 'Unknown source';
     const categoryArr = article?.category as unknown as { name: string }[] | null;
     const category = Array.isArray(categoryArr) ? categoryArr[0]?.name || '' : '';
 
@@ -46,7 +78,7 @@ export async function POST(request: NextRequest) {
     let systemPrompt = '';
     let userPrompt = '';
 
-    if (mode === 'explain') {
+    if (safeMode === 'explain') {
       systemPrompt = `You are TheFarmYard AI, an agricultural intelligence assistant for Ghanaian farmers and agricultural businesses.
 
 When explaining a news article:
@@ -112,7 +144,7 @@ Provide a concise summary highlighting the key points and their relevance to Gha
       return NextResponse.json({
         summary: basicSummary,
         poweredBy: 'knowledge-base',
-        mode,
+        mode: safeMode,
       });
     }
 
@@ -137,25 +169,32 @@ Provide a concise summary highlighting the key points and their relevance to Gha
       return NextResponse.json({
         summary: basicSummary,
         poweredBy: 'knowledge-base',
-        mode,
+        mode: safeMode,
       });
     }
 
     const data = await response.json();
     const aiSummary = data?.message?.content || summary || `News from ${source}: ${title}`;
 
-    // Store AI summary on the article if we have an ID
-    if (articleId && mode === 'summarize') {
-      await supabase
-        .from('news_articles')
-        .update({ ai_summary: aiSummary })
-        .eq('id', articleId);
+    // Store AI summary on the article if we have an ID (admin only)
+    if (articleId && safeMode === 'summarize') {
+      const { data: profile } = await authSupabase
+        .from('profiles').select('role').eq('id', user.id).single();
+      if (profile?.role === 'admin') {
+        await supabase
+          .from('news_articles')
+          .update({ ai_summary: aiSummary })
+          .eq('id', articleId);
+      }
     }
+
+    // Record usage for rate limiting (fire-and-forget)
+    void serviceClient.rpc('record_ai_usage', { p_user_id: user.id, p_endpoint: 'news_summarize' });
 
     return NextResponse.json({
       summary: aiSummary,
       poweredBy: 'ai',
-      mode,
+      mode: safeMode,
     });
   } catch (error) {
     console.error('News summarize error:', error);

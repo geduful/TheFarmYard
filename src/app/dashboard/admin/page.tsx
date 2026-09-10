@@ -529,8 +529,8 @@ function NewsTab({ showToast }: { showToast: (msg: string, type: 'success' | 'er
   useEffect(() => {
     (async () => {
       const [articlesRes, sourcesRes] = await Promise.all([
-        supabase.from('news_articles').select('id, title, slug, status, source_name, published_at, is_featured, category:news_categories(name)').order('created_at', { ascending: false }),
-        supabase.from('news_sources').select('id, name, source_type, status').order('name'),
+        supabase.from('news_articles').select('id, title, slug, status, source_name, published_at, is_featured, category:news_categories(name)').order('created_at', { ascending: false }).limit(300),
+        supabase.from('news_sources').select('id, name, source_type, status').order('name').limit(100),
       ]);
       setArticles(articlesRes.data || []);
       setSources(sourcesRes.data || []);
@@ -726,17 +726,17 @@ export default function AdminDashboard() {
 
       // Parallelize all independent queries
       const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes] = await Promise.all([
-        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false }),
-        supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false }),
-        supabase.from('premium_verification_requests').select('*, profile:profiles!premium_verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role, verification_tier)').order('created_at', { ascending: false }),
-        supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false }),
-        supabase.from('shipments').select('*').order('created_at', { ascending: false }),
-        supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false }),
-        supabase.from('storage_facilities').select('*').order('created_at', { ascending: false }),
-        supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit), farmer:profiles!storage_bookings_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }),
-        supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false }),
-        supabase.from('learning_categories').select('*').order('display_order'),
+        supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false }).limit(500),
+        supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').neq('role', 'admin').order('created_at', { ascending: false }).limit(500),
+        supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false }).limit(200),
+        supabase.from('premium_verification_requests').select('*, profile:profiles!premium_verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role, verification_tier)').order('created_at', { ascending: false }).limit(200),
+        supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(full_name, phone_number, role), reported_user:profiles!reports_reported_user_id_fkey(full_name, role)').order('created_at', { ascending: false }).limit(200),
+        supabase.from('shipments').select('*').order('created_at', { ascending: false }).limit(300),
+        supabase.from('re_registration_requests').select('*').order('created_at', { ascending: false }).limit(200),
+        supabase.from('storage_facilities').select('*').order('created_at', { ascending: false }).limit(200),
+        supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit), farmer:profiles!storage_bookings_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }).limit(300),
+        supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false }).limit(300),
+        supabase.from('learning_categories').select('*').order('display_order').limit(100),
       ]);
 
       if (cancelled) return;
@@ -764,6 +764,26 @@ export default function AdminDashboard() {
     if (error) { showToast(error.message, 'error'); return; }
     setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, is_approved: true } : l)));
     showToast('Listing approved.', 'success');
+
+    // Notify farmer
+    const listing = listings.find((l) => l.id === listingId);
+    if (listing) {
+      fetch('/api/notifications/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: listing.farmer_id,
+          type: 'listing_approved',
+          category: 'marketplace',
+          title: 'Listing Approved',
+          message: `Your listing "${listing.title}" has been approved and is now visible on the marketplace.`,
+          priority: 'normal',
+          actionUrl: '/marketplace',
+          entityType: 'listing',
+          entityId: listingId,
+        }),
+      });
+    }
   }
 
   async function handleReject(listingId: number) {
@@ -820,6 +840,23 @@ export default function AdminDashboard() {
     setVerificationRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r)));
     setUsers((prev) => prev.map((u) => (u.id === profileId ? { ...u, is_verified: true, verification_tier: 'verified' } : u)));
     showToast('Verification approved.', 'success');
+
+    // Notify user
+    fetch('/api/notifications/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: profileId,
+        type: 'verification_approved',
+        category: 'verification',
+        title: 'Verification Approved',
+        message: 'Your identity verification has been approved. You now have a verified badge.',
+        priority: 'high',
+        actionUrl: '/dashboard/profile',
+        entityType: 'verification_request',
+        entityId: requestId,
+      }),
+    });
   }
 
   async function handleRejectVerification(requestId: number) {
@@ -828,6 +865,26 @@ export default function AdminDashboard() {
     if (error) { showToast(error.message, 'error'); return; }
     setVerificationRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r)));
     showToast('Verification rejected.', 'success');
+
+    // Find the profile_id from the request and notify
+    const req = verificationRequests.find((r) => r.id === requestId);
+    if (req) {
+      fetch('/api/notifications/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: req.profile_id,
+          type: 'verification_rejected',
+          category: 'verification',
+          title: 'Verification Not Approved',
+          message: 'Your verification request was not approved. Please review and try again.',
+          priority: 'normal',
+          actionUrl: '/dashboard/profile',
+          entityType: 'verification_request',
+          entityId: requestId,
+        }),
+      });
+    }
   }
 
   async function handleUpdateReportStatus(reportId: number, status: 'under_review' | 'resolved' | 'dismissed') {
@@ -847,6 +904,23 @@ export default function AdminDashboard() {
     setPremiumRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r)));
     setUsers((prev) => prev.map((u) => (u.id === profileId ? { ...u, verification_tier: 'premium' } : u)));
     showToast('Premium granted.', 'success');
+
+    // Notify user
+    fetch('/api/notifications/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: profileId,
+        type: 'tier_changed',
+        category: 'verification',
+        title: 'Premium Verification Granted',
+        message: 'Congratulations! You have been upgraded to Premium verification tier.',
+        priority: 'high',
+        actionUrl: '/dashboard/profile',
+        entityType: 'premium_verification_request',
+        entityId: requestId,
+      }),
+    });
   }
 
   async function handleRejectPremium(requestId: number, reason?: string) {
@@ -1741,8 +1815,7 @@ export default function AdminDashboard() {
                       {booking.status === 'pending' && (
                         <div className="flex gap-2 shrink-0">
                           <button onClick={async () => {
-                            const supabase = createClient();
-                            await supabase.from('storage_bookings').update({ status: 'confirmed' }).eq('id', booking.id);
+                            await fetch('/api/storage-bookings/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: booking.id, newStatus: 'confirmed' }) });
                             setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'confirmed' as const } : b));
                             showToast('Booking confirmed.', 'success');
                           }}
@@ -1750,8 +1823,7 @@ export default function AdminDashboard() {
                             Confirm
                           </button>
                           <button onClick={async () => {
-                            const supabase = createClient();
-                            await supabase.from('storage_bookings').update({ status: 'cancelled' }).eq('id', booking.id);
+                            await fetch('/api/storage-bookings/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: booking.id, newStatus: 'cancelled' }) });
                             setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'cancelled' as const } : b));
                             showToast('Booking cancelled.', 'success');
                           }}
@@ -1762,8 +1834,7 @@ export default function AdminDashboard() {
                       )}
                       {booking.status === 'checked_in' && (
                         <button onClick={async () => {
-                          const supabase = createClient();
-                          await supabase.from('storage_bookings').update({ status: 'stored' }).eq('id', booking.id);
+                          await fetch('/api/storage-bookings/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: booking.id, newStatus: 'stored' }) });
                           setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'stored' as const } : b));
                           showToast('Marked as stored.', 'success');
                         }}
@@ -1773,8 +1844,7 @@ export default function AdminDashboard() {
                       )}
                       {booking.status === 'stored' && (
                         <button onClick={async () => {
-                          const supabase = createClient();
-                          await supabase.from('storage_bookings').update({ status: 'checked_out', checked_out_at: new Date().toISOString() }).eq('id', booking.id);
+                          await fetch('/api/storage-bookings/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookingId: booking.id, newStatus: 'checked_out' }) });
                           setStorageBookings((prev) => prev.map((b) => b.id === booking.id ? { ...b, status: 'checked_out' as const, checked_out_at: new Date().toISOString() } : b));
                           showToast('Marked as checked out.', 'success');
                         }}
@@ -1798,7 +1868,7 @@ export default function AdminDashboard() {
           categories={learningCategories}
           onRefresh={async () => {
             const supabase = createClient();
-            const { data: lr } = await supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false });
+            const { data: lr } = await supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false }).limit(300);
             setLearningResources(lr || []);
           }}
           showToast={showToast}

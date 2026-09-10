@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,7 +19,7 @@ import { formatReadingTime, sanitizeHtml, getProgressColor } from '@/lib/utils';
 
 export default function LearningResourcePage() {
   const { slug } = useParams<{ slug: string }>();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [resource, setResource] = useState<LearningResource | null>(null);
   const [related, setRelated] = useState<LearningResource[]>([]);

@@ -1,5 +1,6 @@
 import type { createServiceSupabaseClient } from '@/lib/supabase/service';
 import { sendSms } from '@/lib/sms';
+import { createNotification } from '@/lib/notifications';
 
 type ServiceClient = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -62,6 +63,39 @@ export async function confirmEscrowPayment(
     buyer?.phone_number,
     `TheFarmYard: payment confirmed for "${listingTitle}". Delivery token: ${escrow.delivery_token}. Share it only after inspecting goods.`
   );
+
+  // Notify buyer
+  createNotification({
+    userId: escrow.buyer_id,
+    type: 'order_payment_received',
+    category: 'orders',
+    title: 'Payment Confirmed',
+    message: `Your payment for "${listingTitle}" has been secured in escrow. Share the delivery token (${escrow.delivery_token}) only after inspecting goods.`,
+    priority: 'high',
+    actionUrl: `/dashboard/buyer`,
+    entityType: 'escrow',
+    entityId: String(escrow.id),
+  });
+
+  // Fetch escrow farmer_id and notify farmer
+  const { data: fullEscrow } = await supabase
+    .from('escrow_transactions')
+    .select('farmer_id')
+    .eq('id', escrow.id)
+    .single();
+  if (fullEscrow?.farmer_id) {
+    createNotification({
+      userId: fullEscrow.farmer_id,
+      type: 'order_payment_received',
+      category: 'orders',
+      title: 'Payment Received',
+      message: `Payment for "${listingTitle}" has been confirmed. You can now dispatch the order.`,
+      priority: 'high',
+      actionUrl: `/dashboard/farmer`,
+      entityType: 'escrow',
+      entityId: String(escrow.id),
+    });
+  }
 
   return { ok: true, escrowId: escrow.id, buyerId: escrow.buyer_id };
 }

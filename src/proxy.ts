@@ -11,6 +11,8 @@ const publicPrefixes = [
   '/forgot-password',
   '/marketplace',
   '/policy',
+  '/learning',
+  '/news',
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -83,11 +85,11 @@ export default async function proxy(request: NextRequest) {
   // reachable so the user sees "Profile not found" instead of a bounce loop
   // between /dashboard/* and /signup.
 
-  if (pathname.startsWith('/dashboard/farmer') && profile?.role !== 'farmer') {
+  if (pathname.startsWith('/dashboard/farmer') && profile?.role !== 'farmer' && profile?.role !== 'admin') {
     return NextResponse.redirect(new URL('/marketplace', request.url));
   }
 
-  if (pathname.startsWith('/dashboard/buyer') && profile?.role !== 'buyer') {
+  if (pathname.startsWith('/dashboard/buyer') && profile?.role !== 'buyer' && profile?.role !== 'admin') {
     return NextResponse.redirect(new URL('/marketplace', request.url));
   }
 

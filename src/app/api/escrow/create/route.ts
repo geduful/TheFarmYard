@@ -3,6 +3,7 @@ import { randomInt } from 'crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { calculateEscrowFees } from '@/lib/utils';
 import { createCollectionPayment, isPaymentsConfigured } from '@/lib/flutterwave';
+import { createNotification } from '@/lib/notifications';
 
 /**
  * POST /api/escrow/create { listingId, quantity }
@@ -77,6 +78,20 @@ export async function POST(request: NextRequest) {
       .select('*, listing:listings(*), farmer:profiles!escrow_transactions_farmer_id_fkey(full_name, phone_number)')
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Notify farmer of new order
+    createNotification({
+      userId: listing.farmer_id,
+      type: 'order_created',
+      category: 'orders',
+      title: 'New Order Received',
+      message: `A buyer has placed an order for "${listing.title}". Payment secured in escrow.`,
+      priority: 'high',
+      actionUrl: `/dashboard/farmer`,
+      entityType: 'escrow',
+      entityId: String(escrow.id),
+    });
+
     return NextResponse.json({ demo: true, escrow });
   }
 

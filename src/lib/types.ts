@@ -28,10 +28,13 @@ export interface Profile {
   blocked_warning: string | null;
   verification_tier: VerificationTier;
   farm_location: string;
-  payout_account_bank?: string | null;
-  payout_account_number?: string | null;
-  payout_account_name?: string | null;
   created_at: string;
+}
+
+export interface PayoutDetails {
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
 }
 
 /**
@@ -708,3 +711,99 @@ export const NEWS_MARKET_REGIONS = [
   'Northern', 'Volta', 'Upper East', 'Upper West', 'Brong Ahafo',
   'Western North', 'Ahafo', 'Bono East', 'Oti', 'Savannah',
 ] as const;
+
+// ──────────────────────────────────────────────────────────────
+// Notifications & Alert Intelligence
+// ──────────────────────────────────────────────────────────────
+
+export type NotificationType =
+  // Marketplace
+  | 'listing_approved' | 'listing_rejected' | 'listing_promoted'
+  // Buyer Requests
+  | 'buyer_request_created' | 'buyer_request_matched' | 'buyer_request_fulfilled' | 'buyer_request_cancelled'
+  // Matching
+  | 'new_match' | 'improved_match'
+  // Orders
+  | 'order_created' | 'order_payment_received' | 'order_released' | 'order_disputed' | 'order_refunded'
+  // Verification
+  | 'verification_submitted' | 'verification_approved' | 'verification_rejected' | 'tier_changed'
+  // Reputation
+  | 'new_rating' | 'trust_score_changed'
+  // Logistics
+  | 'shipment_created' | 'shipment_pickup_scheduled' | 'shipment_assigned' | 'shipment_in_transit'
+  | 'shipment_out_for_delivery' | 'shipment_delivered' | 'shipment_delivery_confirmed'
+  | 'shipment_delivery_issue' | 'shipment_cancelled'
+  // Storage
+  | 'booking_created' | 'booking_confirmed' | 'booking_rejected' | 'booking_checked_in' | 'booking_checked_out'
+  // Market Intelligence
+  | 'price_alert' | 'market_opportunity'
+  // News
+  | 'important_news'
+  // Platform
+  | 'platform_announcement' | 'account_update';
+
+export type NotificationCategory =
+  | 'marketplace' | 'buyer_requests' | 'matching' | 'orders'
+  | 'verification' | 'reputation' | 'logistics' | 'storage'
+  | 'market_intelligence' | 'news' | 'learning' | 'platform';
+
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
+
+export interface Notification {
+  id: number;
+  user_id: string;
+  type: NotificationType;
+  category: NotificationCategory;
+  title: string;
+  message: string;
+  priority: NotificationPriority;
+  read_at: string | null;
+  created_at: string;
+  expires_at: string | null;
+  action_url: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: Record<string, unknown> | null;
+  deduplication_key: string | null;
+}
+
+export interface NotificationPreference {
+  id: number;
+  user_id: string;
+  marketplace_enabled: boolean;
+  buyer_requests_enabled: boolean;
+  matching_enabled: boolean;
+  orders_enabled: boolean;
+  verification_enabled: boolean;
+  reputation_enabled: boolean;
+  logistics_enabled: boolean;
+  storage_enabled: boolean;
+  market_intelligence_enabled: boolean;
+  news_enabled: boolean;
+  learning_enabled: boolean;
+  platform_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const NOTIFICATION_CATEGORY_CONFIG: Record<NotificationCategory, { label: string; color: string; dotColor: string }> = {
+  marketplace:         { label: 'Marketplace',         color: 'text-farm-green',    dotColor: 'bg-farm-green' },
+  buyer_requests:      { label: 'Buyer Requests',      color: 'text-blue-600',      dotColor: 'bg-blue-500' },
+  matching:            { label: 'Matching',            color: 'text-purple-600',    dotColor: 'bg-purple-500' },
+  orders:              { label: 'Orders',              color: 'text-amber-600',     dotColor: 'bg-amber-500' },
+  verification:        { label: 'Verification',        color: 'text-emerald-600',   dotColor: 'bg-emerald-500' },
+  reputation:          { label: 'Reputation',          color: 'text-yellow-600',    dotColor: 'bg-yellow-500' },
+  logistics:           { label: 'Logistics',           color: 'text-orange-600',    dotColor: 'bg-orange-500' },
+  storage:             { label: 'Storage',             color: 'text-cyan-600',      dotColor: 'bg-cyan-500' },
+  market_intelligence: { label: 'Market Intelligence', color: 'text-red-600',       dotColor: 'bg-red-500' },
+  news:                { label: 'News',                color: 'text-indigo-600',    dotColor: 'bg-indigo-500' },
+  learning:            { label: 'Learning',            color: 'text-teal-600',      dotColor: 'bg-teal-500' },
+  platform:            { label: 'Platform',            color: 'text-gray-600',      dotColor: 'bg-gray-500' },
+};
+
+export const NOTIFICATION_PRIORITY_CONFIG: Record<NotificationPriority, { label: string; color: string; bgColor: string }> = {
+  low:      { label: 'Low',      color: 'text-gray-500',  bgColor: 'bg-gray-100' },
+  normal:   { label: 'Normal',   color: 'text-gray-700',  bgColor: 'bg-gray-50' },
+  high:     { label: 'High',     color: 'text-amber-600', bgColor: 'bg-amber-50' },
+  critical: { label: 'Critical', color: 'text-red-600',   bgColor: 'bg-red-50' },
+};
