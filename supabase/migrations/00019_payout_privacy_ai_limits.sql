@@ -38,28 +38,30 @@ CREATE POLICY payout_details_update_own ON payout_details
 -- ============================================================
 -- 2. Migrate existing payout data from profiles to payout_details
 -- ============================================================
--- Ensure payout columns exist (added in 00008, but guard for safety)
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_bank TEXT;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_number TEXT;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payout_account_name TEXT;
+-- Only migrate if payout columns exist (added in 00008, dropped later in this migration).
+-- If columns were never created (fresh install), skip the INSERT entirely.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'profiles' AND column_name = 'payout_account_bank'
+  ) THEN
+    INSERT INTO payout_details (user_id, bank_name, account_number, account_name, created_at)
+    SELECT id, payout_account_bank, payout_account_number, payout_account_name, created_at
+    FROM profiles
+    WHERE payout_account_bank IS NOT NULL
+       OR payout_account_number IS NOT NULL
+       OR payout_account_name IS NOT NULL
+    ON CONFLICT (user_id) DO NOTHING;
 
-INSERT INTO payout_details (user_id, bank_name, account_number, account_name, created_at)
-SELECT id, payout_account_bank, payout_account_number, payout_account_name, created_at
-FROM profiles
-WHERE payout_account_bank IS NOT NULL
-   OR payout_account_number IS NOT NULL
-   OR payout_account_name IS NOT NULL
-ON CONFLICT (user_id) DO NOTHING;
+    ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_bank;
+    ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_number;
+    ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_name;
+  END IF;
+END $$;
 
 -- ============================================================
--- 3. Remove payout columns from profiles (after data migration)
--- ============================================================
-ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_bank;
-ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_number;
-ALTER TABLE profiles DROP COLUMN IF EXISTS payout_account_name;
-
--- ============================================================
--- 4. AI rate limiting table
+-- 3. AI rate limiting table
 -- ============================================================
 CREATE TABLE IF NOT EXISTS ai_rate_limits (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -119,7 +121,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================
--- 5. Profile view without payout columns (for safe public access)
+-- 4. Profile view without payout columns (for safe public access)
 -- ============================================================
 CREATE OR REPLACE VIEW public.public_profile AS
 SELECT
@@ -128,13 +130,13 @@ SELECT
 FROM profiles;
 
 -- ============================================================
--- 6. Admin select fix — drop the overly permissive admin all-users query
+-- 5. Admin select fix — drop the overly permissive admin all-users query
 -- ============================================================
 -- Admin page should NOT fetch payout details for all users.
 -- This is handled by application-layer query changes (see code fixes).
 
 -- ============================================================
--- 7. Input length constraints (defense-in-depth)
+-- 6. Input length constraints (defense-in-depth)
 -- ============================================================
 -- These are soft constraints via check constraints on new data
 -- The application layer enforces these too, but DB provides a safety net
@@ -145,7 +147,7 @@ FROM profiles;
 -- We skip DDL constraints here to avoid migration complexity; app-layer validation is primary.
 
 -- ============================================================
--- 8. Add updated_at trigger for payout_details
+-- 7. Add updated_at trigger for payout_details
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.update_payout_details_timestamp()
 RETURNS TRIGGER AS $$

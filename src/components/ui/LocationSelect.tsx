@@ -32,24 +32,26 @@ export function LocationSelect({
   const towns = region && district ? getTowns(region, district) : [];
 
   function handleRegionChange(newRegion: string) {
-    if (newRegion && district && town) {
-      onChange(formatLocation(newRegion, '', ''));
+    if (newRegion) {
+      onChange(newRegion);
     } else {
       onChange('');
     }
   }
 
   function handleDistrictChange(newDistrict: string) {
-    if (region && newDistrict && town) {
+    if (newDistrict) {
       onChange(formatLocation(region, newDistrict, ''));
     } else {
-      onChange('');
+      onChange(region);
     }
   }
 
   function handleTownChange(newTown: string) {
-    if (region && district && newTown) {
+    if (newTown) {
       onChange(formatLocation(region, district, newTown));
+    } else {
+      onChange(formatLocation(region, district, ''));
     }
   }
 

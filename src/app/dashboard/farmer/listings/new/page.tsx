@@ -52,6 +52,8 @@ export default function NewListingPage() {
     const parsedPrice = parseFloat(price);
     if (!title.trim() || !quantity.trim()) { setError('Title and quantity are required.'); return; }
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError('Price must be greater than zero.'); return; }
+    const finalLocation = location.trim() || profile?.farm_location || '';
+    if (!finalLocation || finalLocation.split('>').length < 3) { setError('Please select a complete location (region, district, and town).'); return; }
     if (imageUrl && !/^https?:\/\/.+/i.test(imageUrl.trim())) { setError('Image URL must start with http(s)://'); return; }
     setLoading(true);
     const supabase = createClient();
@@ -71,7 +73,7 @@ export default function NewListingPage() {
       farmer_id: user.id, title: title.trim(), category, quantity_available: quantity.trim(),
       price_per_unit: parsedPrice, price_unit: priceUnit, image_url: finalImageUrl,
       description: description.trim() || null,
-      location: location.trim() || profile?.farm_location || '',
+      location: finalLocation,
       quality_grade: qualityGrade.trim() || null,
       availability,
       minimum_order: minimumOrder.trim() || null,

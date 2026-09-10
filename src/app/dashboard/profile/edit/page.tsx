@@ -56,6 +56,7 @@ export default function EditProfilePage() {
     setError('');
     setSuccess(false);
     if (!profile) { setError('Profile not found. Please sign up again.'); return; }
+    if (!location.trim() || location.split('>').length < 3) { setError('Please complete your location — select region, district, and town.'); return; }
     setSaving(true);
     const supabase = createClient();
     const { error: updateError } = await supabase.from('profiles').update({

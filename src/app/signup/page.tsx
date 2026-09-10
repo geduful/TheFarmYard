@@ -81,7 +81,9 @@ function SignupPageContent() {
     e.preventDefault();
     setError('');
     setSuccess('');
-    if (!fullName.trim() || !location.trim()) { setError('Full name and location are required.'); return; }
+    if (!fullName.trim()) { setError('Full name is required.'); return; }
+    if (!location.trim()) { setError('Location is required — please select region, district, and town.'); return; }
+    if (location.split('>').length < 3) { setError('Please complete your location — select region, district, and town.'); return; }
     if (phoneNumber.replace(/\D/g, '').length < 12) { setError('Enter a valid Ghana phone number (9 digits after +233).'); return; }
     setLoading(true);
     const supabase = createClient();
@@ -115,6 +117,7 @@ function SignupPageContent() {
   async function handleReRegistrationRequest(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!location.trim() || location.split('>').length < 3) { setError('Please complete your location — select region, district, and town.'); return; }
     setReRegLoading(true);
     const supabase = createClient();
     const { error: insertError } = await supabase.from('re_registration_requests').insert({
