@@ -484,9 +484,11 @@ DROP POLICY IF EXISTS "profiles_select" ON profiles;
 
 -- Replace with a policy that excludes payout details from other users
 -- Users see their own full profile; others see limited fields
+DROP POLICY IF EXISTS "profiles_select_own" ON profiles;
 CREATE POLICY "profiles_select_own" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "profiles_select_public" ON profiles;
 CREATE POLICY "profiles_select_public" ON profiles
   FOR SELECT USING (
     id != auth.uid()
