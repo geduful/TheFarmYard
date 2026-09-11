@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     // Fetch current booking
     const { data: booking, error: fetchError } = await serviceClient
       .from('storage_bookings')
-      .select('id, status, user_id, facility_id, storage_facilities(name)')
+      .select('id, status, farmer_id, facility_id, storage_facilities(name)')
       .eq('id', bookingId)
       .single();
 
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     const notif = notifMessages[newStatus];
     if (notif) {
       createNotification({
-        userId: booking.user_id,
+        userId: booking.farmer_id,
         type: `storage_booking_${newStatus}` as NotificationType,
         category: 'storage',
         title: notif.title,
