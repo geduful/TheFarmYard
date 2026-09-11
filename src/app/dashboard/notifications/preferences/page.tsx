@@ -37,6 +37,7 @@ export default function NotificationPreferencesPage() {
   async function togglePref(field: keyof NotificationPreference) {
     if (!prefs) return;
     const newValue = !prefs[field];
+    const previousValue = prefs[field];
     setPrefs({ ...prefs, [field]: newValue });
     setSaveMsg('');
     try {
@@ -50,8 +51,12 @@ export default function NotificationPreferencesPage() {
         setPrefs(data.preferences);
         setSaveMsg('Saved');
         setTimeout(() => setSaveMsg(''), 2000);
+      } else {
+        setPrefs({ ...prefs, [field]: previousValue });
       }
-    } catch {}
+    } catch {
+      setPrefs({ ...prefs, [field]: previousValue });
+    }
   }
 
   if (loading) {

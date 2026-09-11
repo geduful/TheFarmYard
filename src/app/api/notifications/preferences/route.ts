@@ -83,6 +83,10 @@ export async function PUT(request: NextRequest) {
 
     if (error) throw error;
 
+    if (!data) {
+      return NextResponse.json({ error: 'Update succeeded but could not read back.' }, { status: 500 });
+    }
+
     return NextResponse.json({ preferences: data });
   } catch (error) {
     console.error('Notification preferences PUT error:', error);
