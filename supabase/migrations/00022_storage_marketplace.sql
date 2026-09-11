@@ -5,30 +5,25 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─── SAFELY ADD ENUM VALUES ────────────────────────────────────────────────
--- Add new facility types to existing enum (skip if already present)
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'storage_facility_type' AND enumlabel = 'grain_storage') THEN
-    ALTER TYPE storage_facility_type ADD VALUE 'grain_storage';
-  END IF;
+  ALTER TYPE storage_facility_type ADD VALUE 'grain_storage';
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'storage_facility_type' AND enumlabel = 'produce_warehouse') THEN
-    ALTER TYPE storage_facility_type ADD VALUE 'produce_warehouse';
-  END IF;
+  ALTER TYPE storage_facility_type ADD VALUE 'produce_warehouse';
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'storage_facility_type' AND enumlabel = 'livestock_storage') THEN
-    ALTER TYPE storage_facility_type ADD VALUE 'livestock_storage';
-  END IF;
+  ALTER TYPE storage_facility_type ADD VALUE 'livestock_storage';
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'storage_facility_type' AND enumlabel = 'other') THEN
-    ALTER TYPE storage_facility_type ADD VALUE 'other';
-  END IF;
+  ALTER TYPE storage_facility_type ADD VALUE 'other';
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- ─── EXTEND STORAGE FACILITIES ─────────────────────────────────────────────
@@ -97,14 +92,12 @@ CREATE TRIGGER trg_storage_rating_update
   FOR EACH ROW EXECUTE FUNCTION update_facility_rating();
 
 -- ─── CAPACITY VALIDATION FUNCTION ──────────────────────────────────────────
--- Prevents overbooking by checking capacity before INSERT
 
 CREATE OR REPLACE FUNCTION validate_booking_capacity()
 RETURNS TRIGGER AS $$
 DECLARE
   avail NUMERIC;
 BEGIN
-  -- Only validate for pending bookings (which is the default new status)
   IF NEW.status = 'pending' THEN
     SELECT available_capacity INTO avail
     FROM storage_facilities
@@ -132,17 +125,14 @@ CREATE TRIGGER trg_validate_booking_capacity
 
 -- ─── RLS: OWNER/OPERATOR ACCESS ────────────────────────────────────────────
 
--- Owner can update own facility
 DROP POLICY IF EXISTS "sf_owner_update" ON storage_facilities;
 CREATE POLICY "sf_owner_update" ON storage_facilities
   FOR UPDATE USING (auth.uid() = owner_id);
 
--- Owner can read own facilities (including unapproved ones)
 DROP POLICY IF EXISTS "sf_owner_select" ON storage_facilities;
 CREATE POLICY "sf_owner_select" ON storage_facilities
   FOR SELECT USING (auth.uid() = owner_id);
 
--- Operator can read bookings for own facilities
 DROP POLICY IF EXISTS "sb_operator_select" ON storage_bookings;
 CREATE POLICY "sb_operator_select" ON storage_bookings
   FOR SELECT USING (
@@ -152,7 +142,6 @@ CREATE POLICY "sb_operator_select" ON storage_bookings
     )
   );
 
--- Operator can update bookings for own facilities
 DROP POLICY IF EXISTS "sb_operator_update" ON storage_bookings;
 CREATE POLICY "sb_operator_update" ON storage_bookings
   FOR UPDATE USING (
@@ -162,7 +151,6 @@ CREATE POLICY "sb_operator_update" ON storage_bookings
     )
   );
 
--- Operator can read inventory for own facilities
 DROP POLICY IF EXISTS "si_operator_select" ON storage_inventory;
 CREATE POLICY "si_operator_select" ON storage_inventory
   FOR SELECT USING (
@@ -172,7 +160,6 @@ CREATE POLICY "si_operator_select" ON storage_inventory
     )
   );
 
--- Operator can insert inventory for own facilities
 DROP POLICY IF EXISTS "si_operator_insert" ON storage_inventory;
 CREATE POLICY "si_operator_insert" ON storage_inventory
   FOR INSERT WITH CHECK (
@@ -182,7 +169,6 @@ CREATE POLICY "si_operator_insert" ON storage_inventory
     )
   );
 
--- Operator can update inventory for own facilities
 DROP POLICY IF EXISTS "si_operator_update" ON storage_inventory;
 CREATE POLICY "si_operator_update" ON storage_inventory
   FOR UPDATE USING (
