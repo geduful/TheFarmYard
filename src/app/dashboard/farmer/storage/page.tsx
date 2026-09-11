@@ -148,7 +148,7 @@ export default function FarmerStoragePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         <button onClick={() => setActiveTab('browse')}
           className={`px-4 py-2 rounded-xl text-sm font-medium transition relative ${activeTab === 'browse' ? 'bg-farm-green text-white shadow-md shadow-farm-green/20' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
           Browse Facilities
@@ -159,6 +159,14 @@ export default function FarmerStoragePage() {
           My Bookings
           {bookings.length > 0 && <span className="ml-1.5 text-xs opacity-70">({bookings.length})</span>}
         </button>
+        <Link href="/dashboard/farmer/storage/operator"
+          className="px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition">
+          Operator Dashboard
+        </Link>
+        <Link href="/storage"
+          className="px-4 py-2 rounded-xl text-sm font-medium bg-white text-earth text-earth border border-gray-200 hover:bg-gray-50 transition">
+          Storage Marketplace
+        </Link>
       </div>
 
       {/* ─── BROWSE FACILITIES TAB ─────────────────────────────────────────── */}

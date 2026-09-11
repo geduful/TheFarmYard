@@ -299,7 +299,7 @@ export const SHIPMENT_STATUS_FLOW: ShipmentStatus[] = [
 
 // ─── Storage & Warehousing ──────────────────────────────────────────────────
 
-export type StorageFacilityType = 'cold_storage' | 'dry_storage' | 'refrigerated' | 'open_air' | 'silo';
+export type StorageFacilityType = 'cold_storage' | 'dry_storage' | 'refrigerated' | 'open_air' | 'silo' | 'grain_storage' | 'produce_warehouse' | 'livestock_storage' | 'other';
 
 export type StorageFacilityStatus = 'active' | 'inactive' | 'maintenance';
 
@@ -338,6 +338,13 @@ export interface StorageFacility {
   created_at: string;
   updated_at: string;
   active_bookings_count?: number;
+  owner_id?: string | null;
+  supported_crops?: string[];
+  pricing_model?: string;
+  is_featured?: boolean;
+  rating_avg?: number;
+  rating_count?: number;
+  operating_hours?: string | null;
 }
 
 export interface StorageBooking {
@@ -382,12 +389,30 @@ export interface StorageInventory {
   farmer?: Pick<Profile, 'full_name'>;
 }
 
+export interface StorageRating {
+  id: number;
+  facility_id: number;
+  farmer_id: string;
+  booking_id: number;
+  rating: number;
+  condition_rating: number | null;
+  handling_rating: number | null;
+  reliability_rating: number | null;
+  comment: string | null;
+  created_at: string;
+  farmer?: Pick<Profile, 'full_name'>;
+}
+
 export const STORAGE_FACILITY_TYPE_CONFIG: Record<StorageFacilityType, { label: string; color: string; icon: string }> = {
-  cold_storage:   { label: 'Cold Storage',    color: 'bg-blue-100 text-blue-700',    icon: 'snowflake' },
-  dry_storage:    { label: 'Dry Storage',     color: 'bg-amber-100 text-amber-700',  icon: 'warehouse' },
-  refrigerated:   { label: 'Refrigerated',    color: 'bg-cyan-100 text-cyan-700',    icon: 'thermometer' },
-  open_air:       { label: 'Open Air',        color: 'bg-green-100 text-green-700',  icon: 'sun' },
-  silo:           { label: 'Silo',            color: 'bg-purple-100 text-purple-700', icon: 'cylinder' },
+  cold_storage:       { label: 'Cold Storage',       color: 'bg-blue-100 text-blue-700',    icon: 'snowflake' },
+  dry_storage:        { label: 'Dry Storage',        color: 'bg-amber-100 text-amber-700',  icon: 'warehouse' },
+  refrigerated:       { label: 'Refrigerated',       color: 'bg-cyan-100 text-cyan-700',    icon: 'thermometer' },
+  open_air:           { label: 'Open Air',           color: 'bg-green-100 text-green-700',  icon: 'sun' },
+  silo:               { label: 'Silo',               color: 'bg-purple-100 text-purple-700', icon: 'cylinder' },
+  grain_storage:      { label: 'Grain Storage',      color: 'bg-yellow-100 text-yellow-700', icon: 'wheat' },
+  produce_warehouse:  { label: 'Produce Warehouse',  color: 'bg-orange-100 text-orange-700', icon: 'apple' },
+  livestock_storage:  { label: 'Livestock Storage',  color: 'bg-red-100 text-red-700',      icon: 'cow' },
+  other:              { label: 'Other Storage',      color: 'bg-gray-100 text-gray-700',    icon: 'box' },
 };
 
 export const STORAGE_BOOKING_STATUS_CONFIG: Record<StorageBookingStatus, { label: string; color: string }> = {
