@@ -11,6 +11,7 @@ const publicPrefixes = [
   '/forgot-password',
   '/marketplace',
   '/storage',
+  '/funding',
   '/policy',
   '/learning',
   '/news',

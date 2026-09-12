@@ -12,6 +12,7 @@ const categoryFields: { key: NotificationCategory; field: keyof NotificationPref
   { key: 'reputation', field: 'reputation_enabled' },
   { key: 'logistics', field: 'logistics_enabled' },
   { key: 'storage', field: 'storage_enabled' },
+  { key: 'funding', field: 'funding_enabled' },
   { key: 'platform', field: 'platform_enabled' },
 ];
 

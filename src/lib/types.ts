@@ -758,12 +758,17 @@ export type NotificationType =
   | 'shipment_delivery_issue' | 'shipment_cancelled'
   // Storage
   | 'booking_created' | 'booking_confirmed' | 'booking_rejected' | 'booking_checked_in' | 'booking_checked_out'
+  // Funding
+  | 'funding_opportunity_new' | 'funding_application_submitted' | 'funding_application_received'
+  | 'funding_application_review' | 'funding_application_shortlisted'
+  | 'funding_application_approved' | 'funding_application_rejected' | 'funding_application_withdrawn'
+  | 'funding_deadline_approaching' | 'funding_opportunity_closed'
   // Platform
   | 'platform_announcement' | 'account_update';
 
 export type NotificationCategory =
   | 'marketplace' | 'orders' | 'verification' | 'reputation'
-  | 'logistics' | 'storage' | 'platform';
+  | 'logistics' | 'storage' | 'funding' | 'platform';
 
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
 
@@ -794,6 +799,7 @@ export interface NotificationPreference {
   reputation_enabled: boolean;
   logistics_enabled: boolean;
   storage_enabled: boolean;
+  funding_enabled: boolean;
   platform_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -806,6 +812,7 @@ export const NOTIFICATION_CATEGORY_CONFIG: Record<NotificationCategory, { label:
   reputation:   { label: 'Reputation',   description: 'Ratings and trust score changes',             color: 'text-yellow-600',  dotColor: 'bg-yellow-500' },
   logistics:    { label: 'Logistics',    description: 'Shipping and delivery updates',               color: 'text-orange-600',  dotColor: 'bg-orange-500' },
   storage:      { label: 'Storage',      description: 'Warehousing booking updates',                 color: 'text-cyan-600',    dotColor: 'bg-cyan-500' },
+  funding:      { label: 'Funding',      description: 'Agricultural funding and application updates', color: 'text-violet-600',  dotColor: 'bg-violet-500' },
   platform:     { label: 'Platform',     description: 'Critical system updates (always enabled)',    color: 'text-gray-600',    dotColor: 'bg-gray-500' },
 };
 
@@ -814,4 +821,140 @@ export const NOTIFICATION_PRIORITY_CONFIG: Record<NotificationPriority, { label:
   normal:   { label: 'Normal',   color: 'text-gray-700',  bgColor: 'bg-gray-50' },
   high:     { label: 'High',     color: 'text-amber-600', bgColor: 'bg-amber-50' },
   critical: { label: 'Critical', color: 'text-red-600',   bgColor: 'bg-red-50' },
+};
+
+// ─── Agricultural Finance & Funding ────────────────────────────────────────
+
+export type FundingType =
+  | 'agricultural_grant' | 'farm_input_financing' | 'equipment_financing'
+  | 'working_capital' | 'agricultural_loan' | 'cooperative_funding'
+  | 'government_program' | 'ngo_funding' | 'youth_program'
+  | 'women_program' | 'research_innovation' | 'other';
+
+export type ProviderType =
+  | 'government' | 'bank' | 'microfinance' | 'ngo' | 'development'
+  | 'agricultural_company' | 'cooperative' | 'research_institution' | 'other';
+
+export type ProviderVerificationStatus = 'pending' | 'verified' | 'rejected' | 'suspended';
+
+export type FundingOpportunityStatus =
+  | 'draft' | 'pending_approval' | 'open' | 'closing_soon' | 'closed' | 'suspended';
+
+export type FundingApplicationStatus =
+  | 'draft' | 'submitted' | 'under_review' | 'shortlisted'
+  | 'approved' | 'rejected' | 'withdrawn' | 'expired';
+
+export interface FundingProvider {
+  id: number;
+  name: string;
+  description: string | null;
+  provider_type: ProviderType;
+  logo_url: string | null;
+  website_url: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  location: string | null;
+  verification_status: ProviderVerificationStatus;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FundingOpportunity {
+  id: number;
+  provider_id: number;
+  title: string;
+  description: string | null;
+  funding_type: FundingType;
+  min_amount: number;
+  max_amount: number;
+  currency: string;
+  application_start: string | null;
+  application_deadline: string | null;
+  eligibility_criteria: string | null;
+  supported_crops: string[];
+  supported_activities: string[];
+  supported_locations: string[];
+  target_farmer_categories: string[];
+  required_documents: string[];
+  application_instructions: string | null;
+  external_url: string | null;
+  status: FundingOpportunityStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  provider?: Pick<FundingProvider, 'name' | 'provider_type' | 'logo_url' | 'verification_status'>;
+}
+
+export interface FundingApplication {
+  id: number;
+  opportunity_id: number;
+  farmer_id: string;
+  amount_requested: number;
+  status: FundingApplicationStatus;
+  applicant_name: string | null;
+  applicant_phone: string | null;
+  applicant_email: string | null;
+  farm_location: string | null;
+  farm_size: string | null;
+  agricultural_activity: string | null;
+  crop_details: string | null;
+  funding_purpose: string | null;
+  additional_info: string | null;
+  documents: string[];
+  reviewer_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  opportunity?: Pick<FundingOpportunity, 'title' | 'funding_type' | 'min_amount' | 'max_amount' | 'currency' | 'application_deadline'> & { provider?: Pick<FundingProvider, 'name' | 'verification_status'> };
+  farmer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location'>;
+}
+
+export const FUNDING_TYPE_CONFIG: Record<FundingType, { label: string; color: string }> = {
+  agricultural_grant:   { label: 'Agricultural Grant',     color: 'bg-emerald-100 text-emerald-700' },
+  farm_input_financing: { label: 'Farm Input Financing',   color: 'bg-blue-100 text-blue-700' },
+  equipment_financing:  { label: 'Equipment Financing',    color: 'bg-indigo-100 text-indigo-700' },
+  working_capital:      { label: 'Working Capital',        color: 'bg-amber-100 text-amber-700' },
+  agricultural_loan:    { label: 'Agricultural Loan',      color: 'bg-orange-100 text-orange-700' },
+  cooperative_funding:  { label: 'Cooperative Funding',    color: 'bg-teal-100 text-teal-700' },
+  government_program:   { label: 'Government Program',     color: 'bg-blue-100 text-blue-700' },
+  ngo_funding:          { label: 'NGO/Development Funding', color: 'bg-purple-100 text-purple-700' },
+  youth_program:        { label: 'Youth Agriculture',      color: 'bg-cyan-100 text-cyan-700' },
+  women_program:        { label: "Women's Agriculture",    color: 'bg-pink-100 text-pink-700' },
+  research_innovation:  { label: 'Research/Innovation',    color: 'bg-violet-100 text-violet-700' },
+  other:                { label: 'Other Funding',          color: 'bg-gray-100 text-gray-700' },
+};
+
+export const PROVIDER_TYPE_CONFIG: Record<ProviderType, { label: string; color: string }> = {
+  government:          { label: 'Government',          color: 'bg-blue-100 text-blue-700' },
+  bank:                { label: 'Bank',                color: 'bg-indigo-100 text-indigo-700' },
+  microfinance:        { label: 'Microfinance',        color: 'bg-amber-100 text-amber-700' },
+  ngo:                 { label: 'NGO',                 color: 'bg-purple-100 text-purple-700' },
+  development:         { label: 'Development Org',     color: 'bg-emerald-100 text-emerald-700' },
+  agricultural_company:{ label: 'Agricultural Company', color: 'bg-green-100 text-green-700' },
+  cooperative:         { label: 'Cooperative',         color: 'bg-teal-100 text-teal-700' },
+  research_institution:{ label: 'Research Institution', color: 'bg-violet-100 text-violet-700' },
+  other:               { label: 'Other',               color: 'bg-gray-100 text-gray-700' },
+};
+
+export const FUNDING_OPPORTUNITY_STATUS_CONFIG: Record<FundingOpportunityStatus, { label: string; color: string }> = {
+  draft:            { label: 'Draft',            color: 'bg-gray-100 text-gray-600' },
+  pending_approval: { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700' },
+  open:             { label: 'Open',             color: 'bg-emerald-100 text-emerald-700' },
+  closing_soon:     { label: 'Closing Soon',     color: 'bg-orange-100 text-orange-700' },
+  closed:           { label: 'Closed',           color: 'bg-red-100 text-red-600' },
+  suspended:        { label: 'Suspended',        color: 'bg-gray-100 text-gray-600' },
+};
+
+export const FUNDING_APPLICATION_STATUS_CONFIG: Record<FundingApplicationStatus, { label: string; color: string }> = {
+  draft:         { label: 'Draft',         color: 'bg-gray-100 text-gray-600' },
+  submitted:     { label: 'Submitted',     color: 'bg-blue-100 text-blue-700' },
+  under_review:  { label: 'Under Review',  color: 'bg-indigo-100 text-indigo-700' },
+  shortlisted:   { label: 'Shortlisted',   color: 'bg-purple-100 text-purple-700' },
+  approved:      { label: 'Approved',      color: 'bg-emerald-100 text-emerald-700' },
+  rejected:      { label: 'Rejected',      color: 'bg-red-100 text-red-600' },
+  withdrawn:     { label: 'Withdrawn',     color: 'bg-gray-100 text-gray-600' },
+  expired:       { label: 'Expired',       color: 'bg-orange-100 text-orange-700' },
 };

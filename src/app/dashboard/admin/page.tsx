@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, 
   Report, Shipment, ReRegistrationRequest, StorageFacility, StorageBooking,
-  LearningResource, LearningCategory } from '@/lib/types';
+  LearningResource, LearningCategory, FundingOpportunity, FundingApplication, FundingProvider } from '@/lib/types';
+import { FUNDING_APPLICATION_STATUS_CONFIG } from '@/lib/types';
 import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -703,10 +704,13 @@ export default function AdminDashboard() {
   const [storageBookings, setStorageBookings] = useState<StorageBooking[]>([]);
   const [learningResources, setLearningResources] = useState<LearningResource[]>([]);
   const [learningCategories, setLearningCategories] = useState<LearningCategory[]>([]);
+  const [fundingProviders, setFundingProviders] = useState<FundingProvider[]>([]);
+  const [fundingOpportunities, setFundingOpportunities] = useState<FundingOpportunity[]>([]);
+  const [fundingApplications, setFundingApplications] = useState<FundingApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations' | 'storage' | 'learning' | 'news'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations' | 'storage' | 'learning' | 'news' | 'funding'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingDocs, setViewingDocs] = useState<VerificationRequest | null>(null);
@@ -725,7 +729,7 @@ export default function AdminDashboard() {
       if (p.role !== 'admin') { router.push('/marketplace'); return; }
 
       // Parallelize all independent queries
-      const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes] = await Promise.all([
+      const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes, providersRes, oppsRes, appsRes] = await Promise.all([
         supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false }).limit(500),
         supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').neq('role', 'admin').order('created_at', { ascending: false }).limit(500),
         supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false }).limit(200),
@@ -737,6 +741,9 @@ export default function AdminDashboard() {
         supabase.from('storage_bookings').select('*, facility:storage_facilities(name, facility_type, location, capacity_unit, price_per_unit), farmer:profiles!storage_bookings_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }).limit(300),
         supabase.from('learning_resources').select('*, category:learning_categories(name, slug)').order('created_at', { ascending: false }).limit(300),
         supabase.from('learning_categories').select('*').order('display_order').limit(100),
+        supabase.from('funding_providers').select('*').order('created_at', { ascending: false }).limit(200),
+        supabase.from('funding_opportunities').select('*, provider:funding_providers(name, verification_status)').order('created_at', { ascending: false }).limit(300),
+        supabase.from('funding_applications').select('*, opportunity:funding_opportunities(title, funding_type), farmer:profiles!funding_applications_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }).limit(500),
       ]);
 
       if (cancelled) return;
@@ -751,6 +758,9 @@ export default function AdminDashboard() {
       setStorageBookings(bookingsRes.data || []);
       setLearningResources(learningRes.data || []);
       setLearningCategories(categoriesRes.data || []);
+      setFundingProviders(providersRes.data || []);
+      setFundingOpportunities(oppsRes.data || []);
+      setFundingApplications(appsRes.data || []);
 
       if (listingsRes.error) setLoadError(`Listings failed to load: ${listingsRes.error.message}`);
       setLoading(false);
@@ -1022,7 +1032,7 @@ export default function AdminDashboard() {
       )}
       <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
-          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations', 'storage', 'learning', 'news'] as const).map((tab) => {
+          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations', 'storage', 'learning', 'news', 'funding'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
               users: unverifiedUsers.length + blockedUsers.length,
@@ -1034,6 +1044,7 @@ export default function AdminDashboard() {
               storage: storageBookings.filter((b) => b.status === 'pending').length,
               learning: learningResources.filter((r) => r.status === 'draft').length,
               news: 0,
+              funding: fundingApplications.filter((a) => a.status === 'submitted').length,
             };
               return (
               <button key={tab} onClick={() => setActiveTab(tab)}
@@ -1068,7 +1079,7 @@ export default function AdminDashboard() {
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                   )}
-                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : tab === 'storage' ? 'Storage' : tab === 'learning' ? 'Learning' : tab === 'news' ? 'News' : 'Reports'}
+                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : tab === 'storage' ? 'Storage' : tab === 'learning' ? 'Learning' : tab === 'news' ? 'News' : tab === 'funding' ? 'Funding' : 'Reports'}
                   {counts[tab] > 0 && (
                     <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
                       activeTab === tab ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
@@ -1878,6 +1889,140 @@ export default function AdminDashboard() {
       {/* News Tab */}
       {activeTab === 'news' && (
         <NewsTab showToast={showToast} />
+      )}
+
+      {/* Funding Tab */}
+      {activeTab === 'funding' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900">Funding Opportunities</h3>
+            <span className="text-sm text-gray-500">{fundingOpportunities.length} total</span>
+          </div>
+
+          {fundingProviders.length === 0 && fundingOpportunities.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}>
+                  <path d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium">No funding data yet</p>
+              <p className="text-gray-400 text-sm mt-1">Funding providers and opportunities will appear here.</p>
+            </div>
+          ) : (
+            <>
+              {/* Providers */}
+              {fundingProviders.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Funding Providers ({fundingProviders.length})</h4>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {fundingProviders.map((provider) => (
+                      <div key={provider.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-semibold text-gray-900 text-sm">{provider.name}</h5>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${provider.verification_status === 'verified' ? 'bg-emerald-100 text-emerald-700' : provider.verification_status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                            {provider.verification_status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 capitalize">{provider.provider_type.replace(/_/g, ' ')}</p>
+                        {provider.location && <p className="text-xs text-gray-400 mt-1">{provider.location}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Opportunities */}
+              {fundingOpportunities.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Opportunities ({fundingOpportunities.length})</h4>
+                  <div className="space-y-2">
+                    {fundingOpportunities.map((opp) => (
+                      <div key={opp.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <h5 className="font-semibold text-gray-900 text-sm">{opp.title}</h5>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${opp.status === 'open' ? 'bg-emerald-100 text-emerald-700' : opp.status === 'closed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                              {opp.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {typeof opp.provider === 'object' && opp.provider ? opp.provider.name : 'Unknown provider'} · {opp.funding_type.replace(/_/g, ' ')}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {formatCurrency(opp.min_amount)} – {formatCurrency(opp.max_amount)}
+                            {opp.application_deadline && ` · Deadline: ${new Date(opp.application_deadline).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {opp.status === 'draft' && (
+                            <button onClick={async () => {
+                              await fetch('/api/funding/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opportunityId: opp.id, newStatus: 'open' }) });
+                              setFundingOpportunities((prev) => prev.map((o) => o.id === opp.id ? { ...o, status: 'open' as const } : o));
+                            }} className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">Open</button>
+                          )}
+                          {opp.status === 'open' && (
+                            <button onClick={async () => {
+                              await fetch('/api/funding/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opportunityId: opp.id, newStatus: 'closed' }) });
+                              setFundingOpportunities((prev) => prev.map((o) => o.id === opp.id ? { ...o, status: 'closed' as const } : o));
+                            }} className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition">Close</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Applications */}
+              {fundingApplications.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Applications ({fundingApplications.length})</h4>
+                  <div className="space-y-2">
+                    {fundingApplications.map((app) => (
+                      <div key={app.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <h5 className="font-semibold text-gray-900 text-sm">{typeof app.opportunity === 'object' && app.opportunity ? app.opportunity.title : 'Unknown'}</h5>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${FUNDING_APPLICATION_STATUS_CONFIG[app.status]?.color || 'bg-gray-100 text-gray-600'}`}>
+                              {app.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {typeof app.farmer === 'object' && app.farmer ? app.farmer.full_name : 'Unknown farmer'} · Requested {formatCurrency(app.amount_requested)}
+                          </p>
+                          <p className="text-xs text-gray-400">Submitted {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '—'}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {app.status === 'submitted' && (
+                            <>
+                              <button onClick={async () => {
+                                await fetch('/api/funding/admin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationId: app.id, newStatus: 'under_review' }) });
+                                setFundingApplications((prev) => prev.map((a) => a.id === app.id ? { ...a, status: 'under_review' as const } : a));
+                              }} className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition">Review</button>
+                            </>
+                          )}
+                          {app.status === 'under_review' && (
+                            <>
+                              <button onClick={async () => {
+                                await fetch('/api/funding/admin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationId: app.id, newStatus: 'approved' }) });
+                                setFundingApplications((prev) => prev.map((a) => a.id === app.id ? { ...a, status: 'approved' as const } : a));
+                              }} className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">Approve</button>
+                              <button onClick={async () => {
+                                await fetch('/api/funding/admin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationId: app.id, newStatus: 'rejected' }) });
+                                setFundingApplications((prev) => prev.map((a) => a.id === app.id ? { ...a, status: 'rejected' as const } : a));
+                              }} className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition">Reject</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}
