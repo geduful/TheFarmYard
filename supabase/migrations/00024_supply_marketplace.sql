@@ -396,7 +396,7 @@ CREATE POLICY sp_select_public ON supply_products
     status = 'active'
     AND EXISTS (
       SELECT 1 FROM public.supplier_profiles sp
-      WHERE sp.id = supplier_products.supplier_id
+      WHERE sp.id = supply_products.supplier_id
         AND sp.verification_status = 'approved'
     )
   );
