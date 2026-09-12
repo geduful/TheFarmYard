@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Listing, Profile, VerificationRequest, PremiumVerificationRequest, 
   Report, Shipment, ReRegistrationRequest, StorageFacility, StorageBooking,
-  LearningResource, LearningCategory, FundingOpportunity, FundingApplication, FundingProvider } from '@/lib/types';
-import { FUNDING_APPLICATION_STATUS_CONFIG } from '@/lib/types';
+  LearningResource, LearningCategory, FundingOpportunity, FundingApplication, FundingProvider,
+  SupplierProfile, SupplyProduct, SupplyOrder } from '@/lib/types';
+import { FUNDING_APPLICATION_STATUS_CONFIG, SUPPLIER_VERIFICATION_STATUS_CONFIG, SUPPLY_ORDER_STATUS_CONFIG } from '@/lib/types';
 import { formatCurrency, formatShipmentTimestamp, getShipmentProgress } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -707,10 +708,13 @@ export default function AdminDashboard() {
   const [fundingProviders, setFundingProviders] = useState<FundingProvider[]>([]);
   const [fundingOpportunities, setFundingOpportunities] = useState<FundingOpportunity[]>([]);
   const [fundingApplications, setFundingApplications] = useState<FundingApplication[]>([]);
+  const [supplierProfiles, setSupplierProfiles] = useState<SupplierProfile[]>([]);
+  const [supplyProducts, setSupplyProducts] = useState<SupplyProduct[]>([]);
+  const [supplyOrders, setSupplyOrders] = useState<SupplyOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations' | 'storage' | 'learning' | 'news' | 'funding'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'verifications' | 'premium' | 'reports' | 'logistics' | 'reregistrations' | 'storage' | 'learning' | 'news' | 'funding' | 'suppliers'>('listings');
   const [userCategory, setUserCategory] = useState<'all' | 'farmer' | 'buyer'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingDocs, setViewingDocs] = useState<VerificationRequest | null>(null);
@@ -729,7 +733,7 @@ export default function AdminDashboard() {
       if (p.role !== 'admin') { router.push('/marketplace'); return; }
 
       // Parallelize all independent queries
-      const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes, providersRes, oppsRes, appsRes] = await Promise.all([
+      const [listingsRes, usersRes, verifRes, premiumRes, reportsRes, shipmentsRes, reRegRes, facilitiesRes, bookingsRes, learningRes, categoriesRes, providersRes, oppsRes, appsRes, suppliersRes, supplyProdsRes, supplyOrdersRes] = await Promise.all([
         supabase.from('listings').select('*, farmer:profiles!listings_farmer_id_fkey(full_name, farm_location, is_verified)').order('created_at', { ascending: false }).limit(500),
         supabase.from('profiles').select('id, full_name, phone_number, role, is_verified, is_blocked, blocked_warning, verification_tier, farm_location, created_at').neq('role', 'admin').order('created_at', { ascending: false }).limit(500),
         supabase.from('verification_requests').select('*, profile:profiles!verification_requests_profile_id_fkey(full_name, phone_number, farm_location, role)').order('created_at', { ascending: false }).limit(200),
@@ -744,6 +748,9 @@ export default function AdminDashboard() {
         supabase.from('funding_providers').select('*').order('created_at', { ascending: false }).limit(200),
         supabase.from('funding_opportunities').select('*, provider:funding_providers(name, verification_status)').order('created_at', { ascending: false }).limit(300),
         supabase.from('funding_applications').select('*, opportunity:funding_opportunities(title, funding_type), farmer:profiles!funding_applications_farmer_id_fkey(full_name, phone_number)').order('created_at', { ascending: false }).limit(500),
+        supabase.from('supplier_profiles').select('*, user:profiles!supplier_profiles_user_id_fkey(full_name, phone_number, email)').order('created_at', { ascending: false }).limit(200),
+        supabase.from('supply_products').select('*, supplier:supplier_profiles!supply_products_supplier_id_fkey(business_name, verification_status)').order('created_at', { ascending: false }).limit(300),
+        supabase.from('supply_orders').select('*, items:supply_order_items(*), supplier:supplier_profiles!supply_orders_supplier_id_fkey(business_name), farmer:profiles!supply_orders_farmer_id_fkey(full_name)').order('created_at', { ascending: false }).limit(500),
       ]);
 
       if (cancelled) return;
@@ -761,6 +768,9 @@ export default function AdminDashboard() {
       setFundingProviders(providersRes.data || []);
       setFundingOpportunities(oppsRes.data || []);
       setFundingApplications(appsRes.data || []);
+      setSupplierProfiles(suppliersRes.data || []);
+      setSupplyProducts(supplyProdsRes.data || []);
+      setSupplyOrders(supplyOrdersRes.data || []);
 
       if (listingsRes.error) setLoadError(`Listings failed to load: ${listingsRes.error.message}`);
       setLoading(false);
@@ -1032,7 +1042,7 @@ export default function AdminDashboard() {
       )}
       <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-1.5 p-1 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0">
-          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations', 'storage', 'learning', 'news', 'funding'] as const).map((tab) => {
+          {(['listings', 'users', 'verifications', 'premium', 'reports', 'logistics', 'reregistrations', 'storage', 'learning', 'news', 'funding', 'suppliers'] as const).map((tab) => {
             const counts = {
               listings: pendingListings.length,
               users: unverifiedUsers.length + blockedUsers.length,
@@ -1045,6 +1055,7 @@ export default function AdminDashboard() {
               learning: learningResources.filter((r) => r.status === 'draft').length,
               news: 0,
               funding: fundingApplications.filter((a) => a.status === 'submitted').length,
+              suppliers: supplierProfiles.filter((s) => s.verification_status === 'pending').length,
             };
               return (
               <button key={tab} onClick={() => setActiveTab(tab)}
@@ -1079,7 +1090,7 @@ export default function AdminDashboard() {
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
                   )}
-                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : tab === 'storage' ? 'Storage' : tab === 'learning' ? 'Learning' : tab === 'news' ? 'News' : tab === 'funding' ? 'Funding' : 'Reports'}
+                  {tab === 'listings' ? 'Listings' : tab === 'users' ? 'Users' : tab === 'verifications' ? 'Verifications' : tab === 'premium' ? 'Premium' : tab === 'logistics' ? 'Logistics' : tab === 'reregistrations' ? 'Re-registrations' : tab === 'storage' ? 'Storage' : tab === 'learning' ? 'Learning' : tab === 'news' ? 'News' : tab === 'funding' ? 'Funding' : tab === 'suppliers' ? 'Suppliers' : 'Reports'}
                   {counts[tab] > 0 && (
                     <span className={`px-1.5 py-0.5 text-xs font-bold rounded-full ${
                       activeTab === tab ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
@@ -2021,6 +2032,114 @@ export default function AdminDashboard() {
                 </div>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {/* Suppliers Tab */}
+      {activeTab === 'suppliers' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900">Supplier Management</h3>
+            <span className="text-sm text-gray-500">{supplierProfiles.length} total</span>
+          </div>
+
+          {/* Supplier Applications */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Supplier Applications ({supplierProfiles.filter((s) => s.verification_status === 'pending').length} pending)</h4>
+            {supplierProfiles.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 text-center py-12">
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg>
+                </div>
+                <p className="text-gray-500 font-medium">No supplier applications yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {supplierProfiles.map((supplier) => {
+                  const statusConfig = SUPPLIER_VERIFICATION_STATUS_CONFIG[supplier.verification_status];
+                  const user = supplier.user as Record<string, unknown> | undefined;
+                  return (
+                    <div key={supplier.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h5 className="font-semibold text-gray-900 text-sm">{supplier.business_name}</h5>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig?.color || 'bg-gray-100 text-gray-600'}`}>
+                            {statusConfig?.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {user ? String(user.full_name) : 'Unknown'} · {supplier.business_location}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Products: {supplier.total_products} · Orders: {supplier.total_orders} · Rating: {supplier.rating_avg > 0 ? `${supplier.rating_avg.toFixed(1)} (${supplier.rating_count})` : 'N/A'}
+                        </p>
+                        {supplier.rejection_reason && (
+                          <p className="text-xs text-red-500 mt-1">Reason: {supplier.rejection_reason}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 shrink-0 flex-wrap">
+                        {supplier.verification_status === 'pending' && (
+                          <>
+                            <button onClick={async () => {
+                              await fetch('/api/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: supplier.id, action: 'under_review' }) });
+                              setSupplierProfiles((prev) => prev.map((s) => s.id === supplier.id ? { ...s, verification_status: 'under_review' as const } : s));
+                            }} className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition">Review</button>
+                            <button onClick={async () => {
+                              await fetch('/api/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: supplier.id, action: 'approve' }) });
+                              setSupplierProfiles((prev) => prev.map((s) => s.id === supplier.id ? { ...s, verification_status: 'approved' as const, verified_at: new Date().toISOString() } : s));
+                            }} className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">Approve</button>
+                            <button onClick={async () => {
+                              const reason = prompt('Rejection reason (optional):');
+                              await fetch('/api/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: supplier.id, action: 'reject', reason: reason || undefined }) });
+                              setSupplierProfiles((prev) => prev.map((s) => s.id === supplier.id ? { ...s, verification_status: 'rejected' as const, rejection_reason: reason || null } : s));
+                            }} className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition">Reject</button>
+                          </>
+                        )}
+                        {supplier.verification_status === 'approved' && (
+                          <button onClick={async () => {
+                            if (!confirm('Suspend this supplier?')) return;
+                            await fetch('/api/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: supplier.id, action: 'suspend' }) });
+                            setSupplierProfiles((prev) => prev.map((s) => s.id === supplier.id ? { ...s, verification_status: 'suspended' as const } : s));
+                          }} className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition">Suspend</button>
+                        )}
+                        {supplier.verification_status === 'suspended' && (
+                          <button onClick={async () => {
+                            await fetch('/api/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: supplier.id, action: 'approve' }) });
+                            setSupplierProfiles((prev) => prev.map((s) => s.id === supplier.id ? { ...s, verification_status: 'approved' as const } : s));
+                          }} className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">Reinstate</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Supply Orders */}
+          {supplyOrders.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Supply Orders ({supplyOrders.length})</h4>
+              <div className="space-y-2">
+                {supplyOrders.slice(0, 20).map((order) => {
+                  const statusConfig = SUPPLY_ORDER_STATUS_CONFIG[order.status];
+                  return (
+                    <div key={order.id} className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-900 text-sm">{order.order_number}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig?.color || 'bg-gray-100 text-gray-600'}`}>{statusConfig?.label}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {typeof order.supplier === 'object' && order.supplier ? String(order.supplier.business_name) : 'Supplier'} · {typeof order.farmer === 'object' && order.farmer ? String(order.farmer.full_name) : 'Farmer'} · GH₵ {Number(order.total_amount).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}

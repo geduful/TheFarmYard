@@ -763,12 +763,21 @@ export type NotificationType =
   | 'funding_application_review' | 'funding_application_shortlisted'
   | 'funding_application_approved' | 'funding_application_rejected' | 'funding_application_withdrawn'
   | 'funding_deadline_approaching' | 'funding_opportunity_closed'
+  // Supply
+  | 'supply_order_placed' | 'supply_order_paid' | 'supply_order_confirmed'
+  | 'supply_order_processing' | 'supply_order_dispatched' | 'supply_order_in_transit'
+  | 'supply_order_delivered' | 'supply_order_completed' | 'supply_order_cancelled'
+  | 'supply_order_failed' | 'supply_delivery_issue'
+  | 'supply_product_low_stock' | 'supply_product_out_of_stock'
+  | 'supplier_application_submitted' | 'supplier_application_approved'
+  | 'supplier_application_rejected' | 'supplier_suspended'
+  | 'supplier_new_order' | 'supplier_rating_received'
   // Platform
   | 'platform_announcement' | 'account_update';
 
 export type NotificationCategory =
   | 'marketplace' | 'orders' | 'verification' | 'reputation'
-  | 'logistics' | 'storage' | 'funding' | 'platform';
+  | 'logistics' | 'storage' | 'funding' | 'supply' | 'platform';
 
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
 
@@ -800,6 +809,7 @@ export interface NotificationPreference {
   logistics_enabled: boolean;
   storage_enabled: boolean;
   funding_enabled: boolean;
+  supply_enabled: boolean;
   platform_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -813,6 +823,7 @@ export const NOTIFICATION_CATEGORY_CONFIG: Record<NotificationCategory, { label:
   logistics:    { label: 'Logistics',    description: 'Shipping and delivery updates',               color: 'text-orange-600',  dotColor: 'bg-orange-500' },
   storage:      { label: 'Storage',      description: 'Warehousing booking updates',                 color: 'text-cyan-600',    dotColor: 'bg-cyan-500' },
   funding:      { label: 'Funding',      description: 'Agricultural funding and application updates', color: 'text-violet-600',  dotColor: 'bg-violet-500' },
+  supply:       { label: 'Supplies',     description: 'Supply orders, products, and supplier updates',  color: 'text-blue-600',    dotColor: 'bg-blue-500' },
   platform:     { label: 'Platform',     description: 'Critical system updates (always enabled)',    color: 'text-gray-600',    dotColor: 'bg-gray-500' },
 };
 
@@ -958,3 +969,171 @@ export const FUNDING_APPLICATION_STATUS_CONFIG: Record<FundingApplicationStatus,
   withdrawn:     { label: 'Withdrawn',     color: 'bg-gray-100 text-gray-600' },
   expired:       { label: 'Expired',       color: 'bg-orange-100 text-orange-700' },
 };
+
+// ─── SUPPLY MARKETPLACE TYPES ─────────────────────────────────────────────
+
+export type SupplierVerificationStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'suspended';
+
+export type SupplyProductCategory =
+  | 'seeds' | 'fertilizers' | 'crop_protection' | 'animal_feed'
+  | 'irrigation' | 'farm_equipment' | 'farm_tools' | 'poultry_inputs'
+  | 'livestock_inputs' | 'packaging' | 'other_agricultural_inputs';
+
+export type SupplyProductStatus = 'active' | 'inactive' | 'out_of_stock';
+
+export type SupplyOrderStatus =
+  | 'pending_payment' | 'paid' | 'confirmed' | 'processing'
+  | 'ready_for_dispatch' | 'dispatched' | 'in_transit' | 'delivered'
+  | 'completed' | 'cancelled' | 'failed' | 'delivery_issue';
+
+export interface SupplierProfile {
+  id: string;
+  user_id: string;
+  business_name: string;
+  business_description: string | null;
+  supplier_category: SupplyProductCategory;
+  business_location: string;
+  contact_phone: string | null;
+  contact_email: string | null;
+  operating_areas: string[] | null;
+  verification_status: SupplierVerificationStatus;
+  verified_at: string | null;
+  rejection_reason: string | null;
+  admin_notes: string | null;
+  total_products: number;
+  total_orders: number;
+  total_revenue: number;
+  rating_avg: number;
+  rating_count: number;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<Profile, 'full_name' | 'phone_number' | 'email'>;
+}
+
+export interface SupplyProduct {
+  id: number;
+  supplier_id: string;
+  name: string;
+  description: string | null;
+  category: SupplyProductCategory;
+  product_type: string | null;
+  brand: string | null;
+  unit: string;
+  price: number;
+  currency: string;
+  min_order_quantity: number;
+  stock_quantity: number;
+  reserved_quantity: number;
+  status: SupplyProductStatus;
+  location: string | null;
+  delivery_available: boolean;
+  image_url: string | null;
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+  supplier?: SupplierProfile;
+}
+
+export interface SupplyOrder {
+  id: number;
+  order_number: string;
+  farmer_id: string;
+  supplier_id: string;
+  status: SupplyOrderStatus;
+  subtotal: number;
+  platform_fee: number;
+  total_amount: number;
+  currency: string;
+  delivery_name: string | null;
+  delivery_phone: string | null;
+  delivery_address: string | null;
+  delivery_notes: string | null;
+  payment_ref: string | null;
+  flw_tx_ref: string | null;
+  flw_transaction_id: number | null;
+  paid_at: string | null;
+  confirmed_at: string | null;
+  dispatched_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: SupplyOrderItem[];
+  supplier?: SupplierProfile;
+  farmer?: Pick<Profile, 'full_name' | 'phone_number' | 'farm_location'>;
+}
+
+export interface SupplyOrderItem {
+  id: number;
+  order_id: number;
+  product_id: number;
+  product_name: string;
+  product_image: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  created_at: string;
+  product?: SupplyProduct;
+}
+
+export interface SupplierRating {
+  id: number;
+  supplier_id: string;
+  farmer_id: string;
+  order_id: number;
+  rating: number;
+  product_quality_rating: number | null;
+  delivery_rating: number | null;
+  communication_rating: number | null;
+  comment: string | null;
+  created_at: string;
+  farmer?: Pick<Profile, 'full_name'>;
+}
+
+export const SUPPLIER_VERIFICATION_STATUS_CONFIG: Record<SupplierVerificationStatus, { label: string; color: string }> = {
+  pending:     { label: 'Pending',     color: 'bg-amber-100 text-amber-700' },
+  under_review: { label: 'Under Review', color: 'bg-blue-100 text-blue-700' },
+  approved:    { label: 'Approved',    color: 'bg-emerald-100 text-emerald-700' },
+  rejected:    { label: 'Rejected',    color: 'bg-red-100 text-red-600' },
+  suspended:   { label: 'Suspended',   color: 'bg-gray-100 text-gray-600' },
+};
+
+export const SUPPLY_PRODUCT_CATEGORY_CONFIG: Record<SupplyProductCategory, { label: string; color: string; icon: string }> = {
+  seeds:                      { label: 'Seeds',                      color: 'bg-green-100 text-green-700',  icon: '🌱' },
+  fertilizers:                { label: 'Fertilizers',                color: 'bg-amber-100 text-amber-700', icon: '🧪' },
+  crop_protection:            { label: 'Crop Protection',            color: 'bg-red-100 text-red-700',     icon: '🛡️' },
+  animal_feed:                { label: 'Animal Feed',                color: 'bg-orange-100 text-orange-700', icon: '🐄' },
+  irrigation:                 { label: 'Irrigation',                 color: 'bg-blue-100 text-blue-700',   icon: '💧' },
+  farm_equipment:             { label: 'Farm Equipment',             color: 'bg-gray-100 text-gray-700',   icon: '🚜' },
+  farm_tools:                 { label: 'Farm Tools',                 color: 'bg-stone-100 text-stone-700', icon: '🔨' },
+  poultry_inputs:             { label: 'Poultry Inputs',             color: 'bg-yellow-100 text-yellow-700', icon: '🐔' },
+  livestock_inputs:           { label: 'Livestock Inputs',           color: 'bg-amber-100 text-amber-800', icon: '🐑' },
+  packaging:                  { label: 'Packaging',                  color: 'bg-purple-100 text-purple-700', icon: '📦' },
+  other_agricultural_inputs:  { label: 'Other Inputs',              color: 'bg-gray-100 text-gray-600',   icon: '📋' },
+};
+
+export const SUPPLY_PRODUCT_STATUS_CONFIG: Record<SupplyProductStatus, { label: string; color: string }> = {
+  active:      { label: 'Active',      color: 'bg-emerald-100 text-emerald-700' },
+  inactive:    { label: 'Inactive',    color: 'bg-gray-100 text-gray-600' },
+  out_of_stock: { label: 'Out of Stock', color: 'bg-red-100 text-red-600' },
+};
+
+export const SUPPLY_ORDER_STATUS_CONFIG: Record<SupplyOrderStatus, { label: string; color: string }> = {
+  pending_payment:  { label: 'Pending Payment',  color: 'bg-amber-100 text-amber-700' },
+  paid:             { label: 'Paid',             color: 'bg-blue-100 text-blue-700' },
+  confirmed:        { label: 'Confirmed',        color: 'bg-indigo-100 text-indigo-700' },
+  processing:       { label: 'Processing',       color: 'bg-purple-100 text-purple-700' },
+  ready_for_dispatch: { label: 'Ready for Dispatch', color: 'bg-cyan-100 text-cyan-700' },
+  dispatched:       { label: 'Dispatched',       color: 'bg-orange-100 text-orange-700' },
+  in_transit:       { label: 'In Transit',       color: 'bg-amber-100 text-amber-700' },
+  delivered:        { label: 'Delivered',        color: 'bg-emerald-100 text-emerald-700' },
+  completed:        { label: 'Completed',        color: 'bg-green-100 text-green-700' },
+  cancelled:        { label: 'Cancelled',        color: 'bg-gray-100 text-gray-600' },
+  failed:           { label: 'Failed',           color: 'bg-red-100 text-red-600' },
+  delivery_issue:   { label: 'Delivery Issue',   color: 'bg-red-100 text-red-600' },
+};
+
+export const SUPPLY_UNITS = ['kg', 'tonne', 'bag', 'crate', 'box', 'litre', 'unit', 'dozen', 'bunch', 'sack', 'piece', 'set', 'pair', 'metre', 'roll'] as const;
+export type SupplyUnit = typeof SUPPLY_UNITS[number];

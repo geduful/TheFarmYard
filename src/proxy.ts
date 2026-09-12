@@ -12,6 +12,7 @@ const publicPrefixes = [
   '/marketplace',
   '/storage',
   '/funding',
+  '/supplies',
   '/policy',
   '/learning',
   '/news',
@@ -92,6 +93,10 @@ export default async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/dashboard/buyer') && profile?.role !== 'buyer' && profile?.role !== 'admin') {
+    return NextResponse.redirect(new URL('/marketplace', request.url));
+  }
+
+  if (pathname.startsWith('/dashboard/supplier') && profile?.role !== 'farmer' && profile?.role !== 'admin') {
     return NextResponse.redirect(new URL('/marketplace', request.url));
   }
 
