@@ -1100,18 +1100,18 @@ export const SUPPLIER_VERIFICATION_STATUS_CONFIG: Record<SupplierVerificationSta
   suspended:   { label: 'Suspended',   color: 'bg-gray-100 text-gray-600' },
 };
 
-export const SUPPLY_PRODUCT_CATEGORY_CONFIG: Record<SupplyProductCategory, { label: string; color: string; icon: string }> = {
-  seeds:                      { label: 'Seeds',                      color: 'bg-green-100 text-green-700',  icon: '🌱' },
-  fertilizers:                { label: 'Fertilizers',                color: 'bg-amber-100 text-amber-700', icon: '🧪' },
-  crop_protection:            { label: 'Crop Protection',            color: 'bg-red-100 text-red-700',     icon: '🛡️' },
-  animal_feed:                { label: 'Animal Feed',                color: 'bg-orange-100 text-orange-700', icon: '🐄' },
-  irrigation:                 { label: 'Irrigation',                 color: 'bg-blue-100 text-blue-700',   icon: '💧' },
-  farm_equipment:             { label: 'Farm Equipment',             color: 'bg-gray-100 text-gray-700',   icon: '🚜' },
-  farm_tools:                 { label: 'Farm Tools',                 color: 'bg-stone-100 text-stone-700', icon: '🔨' },
-  poultry_inputs:             { label: 'Poultry Inputs',             color: 'bg-yellow-100 text-yellow-700', icon: '🐔' },
-  livestock_inputs:           { label: 'Livestock Inputs',           color: 'bg-amber-100 text-amber-800', icon: '🐑' },
-  packaging:                  { label: 'Packaging',                  color: 'bg-purple-100 text-purple-700', icon: '📦' },
-  other_agricultural_inputs:  { label: 'Other Inputs',              color: 'bg-gray-100 text-gray-600',   icon: '📋' },
+export const SUPPLY_PRODUCT_CATEGORY_CONFIG: Record<SupplyProductCategory, { label: string; color: string }> = {
+  seeds:                      { label: 'Seeds',                      color: 'bg-green-100 text-green-700' },
+  fertilizers:                { label: 'Fertilizers',                color: 'bg-amber-100 text-amber-700' },
+  crop_protection:            { label: 'Crop Protection',            color: 'bg-red-100 text-red-700' },
+  animal_feed:                { label: 'Animal Feed',                color: 'bg-orange-100 text-orange-700' },
+  irrigation:                 { label: 'Irrigation',                 color: 'bg-blue-100 text-blue-700' },
+  farm_equipment:             { label: 'Farm Equipment',             color: 'bg-gray-100 text-gray-700' },
+  farm_tools:                 { label: 'Farm Tools',                 color: 'bg-stone-100 text-stone-700' },
+  poultry_inputs:             { label: 'Poultry Inputs',             color: 'bg-yellow-100 text-yellow-700' },
+  livestock_inputs:           { label: 'Livestock Inputs',           color: 'bg-amber-100 text-amber-800' },
+  packaging:                  { label: 'Packaging',                  color: 'bg-purple-100 text-purple-700' },
+  other_agricultural_inputs:  { label: 'Other Inputs',              color: 'bg-gray-100 text-gray-600' },
 };
 
 export const SUPPLY_PRODUCT_STATUS_CONFIG: Record<SupplyProductStatus, { label: string; color: string }> = {

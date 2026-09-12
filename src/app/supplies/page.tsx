@@ -116,7 +116,7 @@ export default function SuppliesPage() {
                       : 'bg-white text-gray-600 border border-gray-200 hover:border-farm-green hover:text-farm-green'
                   }`}
                 >
-                  {config?.icon ? `${config.icon} ` : ''}{cat.label}
+                  {config?.label || cat.label}
                 </button>
               );
             })}
@@ -158,12 +158,12 @@ export default function SuppliesPage() {
                     <div className="aspect-[4/3] bg-gray-100 relative">
                       <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                       <span className={`absolute top-3 left-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config?.color || 'bg-gray-100 text-gray-600'}`}>
-                        {config?.icon} {config?.label}
+                        {config?.label}
                       </span>
                     </div>
                   ) : (
                     <div className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center relative">
-                      <span className="text-4xl">{config?.icon || '📋'}</span>
+                      <span className="text-4xl text-gray-300"><svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg></span>
                       <span className={`absolute top-3 left-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config?.color || 'bg-gray-100 text-gray-600'}`}>
                         {config?.label}
                       </span>

@@ -129,7 +129,7 @@ export default function SupplierDashboardPage() {
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Primary Category *</label>
                 <select value={appForm.supplier_category} onChange={(e) => setAppForm({ ...appForm, supplier_category: e.target.value as SupplyProductCategory })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm">
                   {Object.entries(SUPPLY_PRODUCT_CATEGORY_CONFIG).map(([k, v]) => (
-                    <option key={k} value={k}>{v.icon} {v.label}</option>
+                    <option key={k} value={k}>{v.label}</option>
                   ))}
                 </select>
               </div>
